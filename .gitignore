@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-electron/
+build/
+release/
+*.exe
+*.dmg
+*.AppImage
+.env
+docs/git.md
+.claude/
