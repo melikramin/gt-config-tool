@@ -51,3 +51,47 @@ export function buildOutputCmd(password: string, index: number, on: boolean): st
 export function buildAddTagCmd(password: string, tagId: string): string {
   return buildCmd(password, 'TAGS', ['ADD', tagId]);
 }
+
+// ---- Server tab commands ----
+
+/** Read APN settings */
+export function buildApnReadCmd(password: string): string {
+  return buildCmd(password, 'APN');
+}
+
+/** Write APN settings */
+export function buildApnWriteCmd(password: string, name: string, login: string, pass: string): string {
+  return buildCmd(password, 'APN', [name, login, pass]);
+}
+
+/** Read server settings: $PASS;SERVERn;GET */
+export function buildServerReadCmd(password: string, index: number): string {
+  return buildCmd(password, `SERVER${index}`, ['GET']);
+}
+
+/**
+ * Write server settings:
+ * $PASS;SERVERn;SET;0F;01;IP;PORT;IMEI;IMEI;10;0;120;30;1;CHANNEL;PROTOCOL
+ * Hidden fields: SERVER_PROP=0F, PROTO_PROP=01, LOGIN/PASS=IMEI, timeouts, IP_PROTO=1.
+ * CHANNEL: 0=GSM, 1=WiFi, 2=GSM+WiFi, 3=WiFi+GSM
+ * PROTOCOL: 0=IPS, 1=GT9
+ */
+export function buildServerWriteCmd(
+  password: string,
+  index: number,
+  ip: string,
+  port: string,
+  imei: string,
+  channel: string,
+  protocol: string,
+): string {
+  return buildCmd(password, `SERVER${index}`, [
+    'SET', '0F', '01', ip, port,
+    imei, imei, '10', '0', '120', '30', '1', channel, protocol,
+  ]);
+}
+
+/** LOG;RESET — sent after saving server settings */
+export function buildLogResetCmd(password: string): string {
+  return buildCmd(password, 'LOG', ['RESET']);
+}

@@ -21,6 +21,7 @@ export const Toolbar: FC = () => {
   const { t, locale, setLocale } = useI18n();
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showRebootConfirm, setShowRebootConfirm] = useState(false);
   const portRef = useRef(port);
   portRef.current = port;
 
@@ -80,8 +81,13 @@ export const Toolbar: FC = () => {
     }
   };
 
-  const handleReboot = async (): Promise<void> => {
+  const handleRebootClick = (): void => {
     if (!isConnected) return;
+    setShowRebootConfirm(true);
+  };
+
+  const handleRebootConfirm = async (): Promise<void> => {
+    setShowRebootConfirm(false);
     try {
       await window.serial.sendCommand(`$${password};RESET`);
     } catch (err) {
@@ -121,7 +127,7 @@ export const Toolbar: FC = () => {
 
       {/* Reboot */}
       <button
-        onClick={handleReboot}
+        onClick={handleRebootClick}
         disabled={!isConnected}
         className="bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm px-3 py-1 rounded disabled:opacity-50"
       >
@@ -131,19 +137,23 @@ export const Toolbar: FC = () => {
       {/* Separator */}
       <div className="w-px h-6 bg-zinc-700" />
 
-      {/* Password */}
-      <div className="flex items-center gap-1">
-        <label className="text-zinc-400 text-sm">{t('toolbar.password')}</label>
-        <input
-          type="text"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="bg-zinc-800 text-zinc-200 text-sm border border-zinc-600 rounded px-2 py-1 w-20"
-        />
-      </div>
+      {/* Password (hidden when connected) */}
+      {!isConnected && (
+        <>
+          <div className="flex items-center gap-1">
+            <label className="text-zinc-400 text-sm">{t('toolbar.password')}</label>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="bg-zinc-800 text-zinc-200 text-sm border border-zinc-600 rounded px-2 py-1 w-20"
+            />
+          </div>
 
-      {/* Separator */}
-      <div className="w-px h-6 bg-zinc-700" />
+          {/* Separator */}
+          <div className="w-px h-6 bg-zinc-700" />
+        </>
+      )}
 
       {/* Template buttons */}
       <button
@@ -171,6 +181,29 @@ export const Toolbar: FC = () => {
         <option value="en">EN</option>
         <option value="ru">RU</option>
       </select>
+      {/* Reboot confirmation modal */}
+      {showRebootConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl p-5 max-w-sm w-full mx-4">
+            <h3 className="text-zinc-100 text-base font-semibold mb-2">{t('confirm.reboot')}</h3>
+            <p className="text-zinc-400 text-sm mb-5">{t('confirm.rebootMessage')}</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowRebootConfirm(false)}
+                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm px-4 py-1.5 rounded"
+              >
+                {t('confirm.cancel')}
+              </button>
+              <button
+                onClick={handleRebootConfirm}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 rounded"
+              >
+                {t('confirm.yes')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

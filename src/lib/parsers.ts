@@ -340,6 +340,62 @@ export function parseEncoder(raw: string): EncoderData {
   return { counter: f.length > 0 ? f[f.length - 1] : '' };
 }
 
+// APN: $APN;APN_NAME;APN_LOGIN;APN_PASS
+export interface ApnData {
+  name: string;
+  login: string;
+  password: string;
+}
+
+export function parseApn(raw: string): ApnData {
+  const f = fields(raw);
+  return {
+    name: safeField(f, 0),
+    login: safeField(f, 1),
+    password: safeField(f, 2),
+  };
+}
+
+// SERVER1;GET / SERVER2;GET:
+// $SERVER1;SERVER_PROP;PROTO_PROP;IP;PORT;LOGIN;PASS;T1;T2;T3;T4;IP_PROTO;UNK1;UNK2
+export interface ServerData {
+  serverProp: string;
+  protoProp: string;
+  ip: string;
+  port: string;
+  login: string;
+  pass: string;
+  timeout1: string;
+  timeout2: string;
+  timeout3: string;
+  timeout4: string;
+  ipProto: string;
+  channel: string;
+  protocol: string;
+}
+
+export function parseServer(raw: string): ServerData {
+  const f = fields(raw);
+  const serverProp = safeField(f, 0, '0F');
+  const protoProp = safeField(f, 1, '01');
+
+  return {
+    serverProp,
+    protoProp,
+    ip: safeField(f, 2),
+    port: safeField(f, 3),
+    login: safeField(f, 4),
+    pass: safeField(f, 5),
+    timeout1: safeField(f, 6, '10'),
+    timeout2: safeField(f, 7, '0'),
+    timeout3: safeField(f, 8, '120'),
+    timeout4: safeField(f, 9, '30'),
+    ipProto: safeField(f, 10, '1'),
+    channel: safeField(f, 11, '0'),
+    protocol: safeField(f, 12, '1'),
+  };
+}
+
 // TAGS: $TAGS;MEMORY;LIMIT;ADDED
 export interface TagsData {
   memory: string;

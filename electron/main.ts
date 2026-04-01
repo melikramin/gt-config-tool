@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import { writeFileSync } from 'fs';
 import path from 'path';
 import { SerialManager } from './serial/SerialManager';
@@ -117,7 +117,10 @@ ipcMain.handle('dialog:saveFile', async (_event, content: string, defaultName: s
 
 // --- App lifecycle ---
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   serialManager.disconnect().catch(() => {});

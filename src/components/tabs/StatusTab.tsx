@@ -113,8 +113,8 @@ const Panel: FC<{ title: string; children: React.ReactNode; className?: string }
 // ---- Main component ----
 
 export const StatusTab: FC = () => {
-  const { password, isConnected } = useConnectionStore();
-  const { setLastError } = useStatusStore();
+  const { password, isConnected, setConnected, setDeviceImei } = useConnectionStore();
+  const { setLastError, setShowPasswordError } = useStatusStore();
   const { t, locale } = useI18n();
 
   const [state, setState] = useState<StatusState>(INITIAL_STATE);
@@ -122,6 +122,17 @@ export const StatusTab: FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [initDone, setInitDone] = useState(false);
   const [imeiLoaded, setImeiLoaded] = useState(false);
+
+  const handlePasswordError = useCallback(async () => {
+    setLastError(t('error.wrongPassword'));
+    setShowPasswordError(true);
+    try {
+      await window.serial.disconnect();
+    } catch {
+      // ignore
+    }
+    setConnected(false);
+  }, [setLastError, setShowPasswordError, setConnected, t]);
   const [showDebug, setShowDebug] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const debugRef = useRef<HTMLPreElement>(null);
@@ -197,10 +208,11 @@ export const StatusTab: FC = () => {
     setState((prev) => ({ ...prev, gsm }));
     if (gsm.imei && gsm.imei !== '0' && gsm.imei !== '') {
       setImeiLoaded(true);
+      setDeviceImei(gsm.imei);
     }
-  }, [addDebugLine]);
+  }, [addDebugLine, setDeviceImei]);
 
-  usePolling(gsmCommands, isConnected && initDone && !imeiLoaded, handleGsmResponse, 1000);
+  usePolling(gsmCommands, isConnected && initDone && !imeiLoaded, handleGsmResponse, 1000, 50, handlePasswordError);
 
   // --- Phase 3: Cyclic polling for everything else ---
   const pollingCommands = useMemo(() => buildPollingCommands(password), [password]);
@@ -248,7 +260,7 @@ export const StatusTab: FC = () => {
     });
   }, [addDebugLine]);
 
-  usePolling(pollingCommands, isConnected && initDone, handleResponse);
+  usePolling(pollingCommands, isConnected && initDone, handleResponse, 200, 50, handlePasswordError);
 
   // Toggle output ON/OFF
   const handleOutputToggle = useCallback(async (index: number, on: boolean) => {
@@ -407,53 +419,51 @@ export const StatusTab: FC = () => {
         </Panel>
 
         {/* ---- 5. Level Sensors ---- */}
-        <Panel title={t('status.levelSensors')} className="lg:col-span-2">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-zinc-500 border-b border-zinc-700">
-                  <th className="text-left py-1 pr-3 font-medium">{t('status.sensor')}</th>
-                  <th className="text-right py-1 px-2 font-medium">{t('status.height')}, {t('status.mm')}</th>
-                  <th className="text-right py-1 px-2 font-medium">{t('status.volume')}, {t('status.liters')}</th>
-                  <th className="text-right py-1 px-2 font-medium">{t('status.temperature')}, °C</th>
-                  <th className="text-right py-1 px-2 font-medium">{t('status.density')}, {t('status.kgm3')}</th>
-                  <th className="text-right py-1 pl-2 font-medium">{t('status.mass')}, {t('status.kg')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lls.map((sensor, i) => {
-                  const noData = !sensor.height && !sensor.volume;
-                  const disconnected = sensor.height === '-1' && sensor.volume === '-1';
-                  if (noData) {
-                    return (
-                      <tr key={i} className="border-b border-zinc-800 opacity-40">
-                        <td className="py-1 pr-3 text-zinc-400 font-medium">LLS {i + 1}</td>
-                        <td colSpan={5} className="py-1 px-2 text-center text-zinc-500">—</td>
-                      </tr>
-                    );
-                  }
-                  if (disconnected) {
-                    return (
-                      <tr key={i} className="border-b border-zinc-800 opacity-50">
-                        <td className="py-1 pr-3 text-zinc-400 font-medium">LLS {i + 1}</td>
-                        <td colSpan={5} className="py-1 px-2 text-center text-red-400">{t('status.noSensorData')}</td>
-                      </tr>
-                    );
-                  }
+        <Panel title={t('status.levelSensors')}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-zinc-500 border-b border-zinc-700">
+                <th className="text-left py-1 pr-1 font-medium">#</th>
+                <th className="text-right py-1 px-1 font-medium">{t('status.height')}</th>
+                <th className="text-right py-1 px-1 font-medium">{t('status.volume')}</th>
+                <th className="text-right py-1 px-1 font-medium">{t('status.temperature')}</th>
+                <th className="text-right py-1 px-1 font-medium">{t('status.density')}</th>
+                <th className="text-right py-1 pl-1 font-medium">{t('status.mass')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lls.map((sensor, i) => {
+                const noData = !sensor.height && !sensor.volume;
+                const disconnected = sensor.height === '-1' && sensor.volume === '-1';
+                if (noData) {
                   return (
-                    <tr key={i} className="border-b border-zinc-800">
-                      <td className="py-1 pr-3 text-zinc-400 font-medium">LLS {i + 1}</td>
-                      <td className="py-1 px-2 text-right text-zinc-200 font-mono">{sensor.height}</td>
-                      <td className="py-1 px-2 text-right text-zinc-200 font-mono">{sensor.volume}</td>
-                      <td className="py-1 px-2 text-right text-zinc-200 font-mono">{sensor.temperature}</td>
-                      <td className="py-1 px-2 text-right text-zinc-200 font-mono">{sensor.density}</td>
-                      <td className="py-1 pl-2 text-right text-zinc-200 font-mono">{sensor.mass}</td>
+                    <tr key={i} className="border-b border-zinc-800 opacity-40">
+                      <td className="py-1 pr-1 text-zinc-400 font-medium">{i + 1}</td>
+                      <td colSpan={5} className="py-1 px-1 text-center text-zinc-500">—</td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                }
+                if (disconnected) {
+                  return (
+                    <tr key={i} className="border-b border-zinc-800 opacity-50">
+                      <td className="py-1 pr-1 text-zinc-400 font-medium">{i + 1}</td>
+                      <td colSpan={5} className="py-1 px-1 text-center text-red-400">{t('status.noSensorData')}</td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr key={i} className="border-b border-zinc-800">
+                    <td className="py-1 pr-1 text-zinc-400 font-medium">{i + 1}</td>
+                    <td className="py-1 px-1 text-right text-zinc-200 font-mono">{sensor.height}</td>
+                    <td className="py-1 px-1 text-right text-zinc-200 font-mono">{sensor.volume}</td>
+                    <td className="py-1 px-1 text-right text-zinc-200 font-mono">{sensor.temperature}</td>
+                    <td className="py-1 px-1 text-right text-zinc-200 font-mono">{sensor.density}</td>
+                    <td className="py-1 pl-1 text-right text-zinc-200 font-mono">{sensor.mass}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </Panel>
 
         {/* ---- 6. Cards ---- */}
