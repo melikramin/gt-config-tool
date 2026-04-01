@@ -7,15 +7,20 @@ import { useEffect, useRef } from 'react';
  * for each successful response, then pauses `delayMs` before starting the next cycle.
  * Automatically stops when `active` becomes false or on unmount.
  */
+const PE_PATTERN = /;PE$/;
+
 export function usePolling(
   commands: string[],
   active: boolean,
   onResponse: (command: string, response: string) => void,
   delayMs = 200,
   commandDelayMs = 50,
+  onPasswordError?: () => void,
 ): void {
   const onResponseRef = useRef(onResponse);
   onResponseRef.current = onResponse;
+  const onPasswordErrorRef = useRef(onPasswordError);
+  onPasswordErrorRef.current = onPasswordError;
 
   useEffect(() => {
     if (!active || commands.length === 0) return;
@@ -28,9 +33,13 @@ export function usePolling(
           if (cancelled) return;
           try {
             const response = await window.serial.sendCommand(cmd);
-            if (!cancelled) {
-              onResponseRef.current(cmd, response);
+            if (cancelled) return;
+            if (PE_PATTERN.test(response.trim())) {
+              cancelled = true;
+              onPasswordErrorRef.current?.();
+              return;
             }
+            onResponseRef.current(cmd, response);
           } catch {
             // Polling errors are non-fatal — skip to next command
           }

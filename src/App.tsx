@@ -1,4 +1,4 @@
-import { type FC, useState, useRef, useCallback } from 'react';
+import { type FC, useState, useRef, useCallback, useEffect } from 'react';
 import { Toolbar } from './components/layout/Toolbar';
 import { Sidebar, type TabId } from './components/layout/Sidebar';
 import { StatusBar } from './components/layout/StatusBar';
@@ -17,6 +17,8 @@ import { SecurityTab } from './components/tabs/SecurityTab';
 import { PrinterTab } from './components/tabs/PrinterTab';
 import { TagsTab } from './components/tabs/TagsTab';
 import { useConnectionStore } from './stores/connectionStore';
+import { useStatusStore } from './stores/statusStore';
+import { useI18n } from './i18n';
 
 const TAB_COMPONENTS: Record<TabId, FC> = {
   status: StatusTab,
@@ -39,6 +41,15 @@ const App: FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('status');
   const prevTabRef = useRef<TabId>('status');
   const { password, isConnected } = useConnectionStore();
+  const { showPasswordError, setShowPasswordError } = useStatusStore();
+  const { t } = useI18n();
+
+  // Switch to Status tab on disconnect
+  useEffect(() => {
+    if (!isConnected) {
+      setActiveTab('status');
+    }
+  }, [isConnected]);
 
   const handleTabChange = useCallback((tab: TabId) => {
     // When leaving diagnostics tab, disable all logs to avoid interference
@@ -62,6 +73,24 @@ const App: FC = () => {
         </main>
       </div>
       <StatusBar />
+
+      {/* Wrong password modal */}
+      {showPasswordError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl p-5 max-w-sm w-full mx-4">
+            <h3 className="text-red-400 text-base font-semibold mb-2">{t('error.wrongPassword')}</h3>
+            <p className="text-zinc-400 text-sm mb-5">{t('error.wrongPasswordDetail')}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowPasswordError(false)}
+                className="bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm px-4 py-1.5 rounded"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

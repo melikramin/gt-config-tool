@@ -16,6 +16,12 @@ export interface Translations {
   'error.selectPort': string;
   'error.connect': string;
   'error.reboot': string;
+  'error.wrongPassword': string;
+  'error.wrongPasswordDetail': string;
+  'confirm.reboot': string;
+  'confirm.rebootMessage': string;
+  'confirm.yes': string;
+  'confirm.cancel': string;
 
   // StatusBar
   'status.connected': string;
@@ -77,6 +83,34 @@ export interface Translations {
   'status.tagsLimit': string;
   'status.tagsAdded': string;
   'status.add': string;
+
+  // Server tab
+  'server.apnSettings': string;
+  'server.apnName': string;
+  'server.apnLogin': string;
+  'server.apnPassword': string;
+  'server.serverSettings': string;
+  'server.server': string;
+  'server.ip': string;
+  'server.port': string;
+  'server.channel': string;
+  'server.protocol': string;
+  'server.channelGsm': string;
+  'server.channelWifi': string;
+  'server.channelGsmWifi': string;
+  'server.channelWifiGsm': string;
+  'server.protoIps': string;
+  'server.protoGt9': string;
+  'server.protoTsense': string;
+  'server.reading': string;
+  'server.saving': string;
+  'server.readSuccess': string;
+  'server.saveSuccess': string;
+  'server.readError': string;
+  'server.saveError': string;
+  'server.notConnected': string;
+  'server.imeiNotReady': string;
+  'server.server2NotSupported': string;
 
   // Diagnostics tab
   'diag.addTime': string;
