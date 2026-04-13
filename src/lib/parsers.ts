@@ -155,27 +155,40 @@ export function parseDate(raw: string): DateData {
   };
 }
 
-// REP: $REP;CTR;0200;241017;224920;NA;NA;NA;NA;NA;NA;NA;NA;250;1;6340;894;11364;4396;+27;-128;0,2;0f;20;03;+0;000000000000
+// REP: $REP;GT-9;0000;130426;181153;5539.9646;N;03734.4980;E;+192;1;0;9;NA;NA;NA;NA;11863;4590;+30;-128;0,0;8f;23;03;+0;00000807EBC6
 //
 // Fields counted from START (fixed positions):
-//   [2]=DATE(DDMMYY), [3]=TIME(HHMMSS), [4]=LONGITUDE, [6]=LATITUDE
+//   [2]=DATE(DDMMYY), [3]=TIME(HHMMSS)
+//   [4]=LAT(DDMM.MMMM), [5]=N/S, [6]=LON(DDDMM.MMMM), [7]=E/W
+//   [8]=ALT, [9]=?, [10]=?, [11]=SATELLITES
 //
-// Fields counted from END (stable regardless of middle NA count):
-//   len-1  = TAG_ID (last 12 hex chars)
-//   len-2  = WiFi RSSI (dBm)
-//   len-3  = WiFi Status (hex)
-//   len-4  = GSM RSSI (0-30)
-//   len-5  = GSM Status (hex)
-//   len-6  = ???
-//   len-7  = Int. Temperature (°C)
-//   len-10 = Ext. Battery (mV)
-//
-// Satellites: ~field[11] (may be NA when no GPS fix)
+// Fields counted from END:
+//   len-1  = TAG_ID, len-2 = WiFi RSSI, len-3 = WiFi Status,
+//   len-4  = GSM RSSI, len-5 = GSM Status, len-8 = Int. Temperature,
+//   len-10 = Ext. Battery
+
+/**
+ * Convert NMEA coordinate `DDMM.MMMM` (or `DDDMM.MMMM`) + hemisphere to
+ * signed decimal degrees string. `degDigits` = 2 for latitude, 3 for longitude.
+ */
+function nmeaToDecimal(raw: string, hemi: string, degDigits: 2 | 3): string {
+  if (!raw || raw === 'NA') return '';
+  const n = parseFloat(raw);
+  if (!Number.isFinite(n)) return '';
+  const deg = Math.floor(n / 100);
+  const min = n - deg * 100;
+  let dec = deg + min / 60;
+  if (hemi === 'S' || hemi === 'W') dec = -dec;
+  // Rough sanity check for latitude vs longitude range
+  const maxAbs = degDigits === 2 ? 90 : 180;
+  if (Math.abs(dec) > maxAbs) return '';
+  return dec.toFixed(6);
+}
 
 export interface RepData {
   extBattery: string;
-  latitude: string;
-  longitude: string;
+  latitude: string;       // decimal degrees, signed (e.g. "55.666077")
+  longitude: string;      // decimal degrees, signed
   satellites: string;
   gsmStatus: string;
   gsmRssi: string;
@@ -189,23 +202,18 @@ export function parseRep(raw: string): RepData {
   const f = fields(raw);
   const len = f.length;
 
-  // Satellites: search from field[8] to field[14] for first non-NA numeric value
-  let satellites = '';
-  for (let i = 8; i < Math.min(15, len); i++) {
-    const v = f[i];
-    if (v !== undefined && v !== 'NA' && v !== '') {
-      const n = parseInt(v, 10);
-      if (!isNaN(n) && n >= 0 && n <= 50) {
-        satellites = v;
-        break;
-      }
-    }
-  }
+  const latitude = nmeaToDecimal(safeField(f, 4), safeField(f, 5), 2);
+  const longitude = nmeaToDecimal(safeField(f, 6), safeField(f, 7), 3);
+
+  // Satellites at fixed position [11]; fall back to '' if NA/missing.
+  const satRaw = safeField(f, 11);
+  const satN = parseInt(satRaw, 10);
+  const satellites = Number.isFinite(satN) && satN >= 0 && satN <= 50 ? String(satN) : '';
 
   return {
     extBattery: safeField(f, len - 10),
-    latitude: safeField(f, 6),
-    longitude: safeField(f, 4),
+    latitude,
+    longitude,
     satellites,
     gsmStatus: safeField(f, len - 5),
     gsmRssi: safeField(f, len - 4),
@@ -393,6 +401,45 @@ export function parseServer(raw: string): ServerData {
     ipProto: safeField(f, 10, '1'),
     channel: safeField(f, 11, '0'),
     protocol: safeField(f, 12, '1'),
+  };
+}
+
+// WIFINET: $WIFINET;COUNT
+export function parseWifiCount(raw: string): number {
+  const f = fields(raw);
+  const n = parseInt(safeField(f, 0, '0'), 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+// WIFINETn;GET: $WIFINETn;CHANNEL;SSID;AUTH;ENCRYPT;KEY;IP_MODE;IP;MASK;GATEWAY;DNS1;DNS2
+export interface WifiNetworkData {
+  channel: string;
+  ssid: string;
+  auth: string;
+  encrypt: string;
+  key: string;
+  ipMode: string;
+  ip: string;
+  mask: string;
+  gateway: string;
+  dns1: string;
+  dns2: string;
+}
+
+export function parseWifiNetwork(raw: string): WifiNetworkData {
+  const f = fields(raw);
+  return {
+    channel: safeField(f, 0, '0'),
+    ssid: safeField(f, 1),
+    auth: safeField(f, 2, '1'),
+    encrypt: safeField(f, 3, '0'),
+    key: safeField(f, 4),
+    ipMode: safeField(f, 5, '1'),
+    ip: safeField(f, 6),
+    mask: safeField(f, 7),
+    gateway: safeField(f, 8),
+    dns1: safeField(f, 9),
+    dns2: safeField(f, 10),
   };
 }
 

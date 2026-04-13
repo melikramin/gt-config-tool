@@ -112,6 +112,72 @@ export interface Translations {
   'server.imeiNotReady': string;
   'server.server2NotSupported': string;
 
+  // Protocol tab
+  'proto.colStatus': string;
+  'proto.colInputs': string;
+  'proto.colOutputs': string;
+  'proto.colDut': string;
+  'proto.colDutNpp': string;
+  'proto.statusDevice': string;
+  'proto.statusPacket': string;
+  'proto.statusHdop': string;
+  'proto.statusExtPower': string;
+  'proto.statusBattery': string;
+  'proto.statusIntTemp': string;
+  'proto.statusGsmLbs': string;
+  'proto.statusGsmRssi': string;
+  'proto.statusGsm': string;
+  'proto.statusWifi': string;
+  'proto.checkAll': string;
+  'proto.uncheckAll': string;
+  'proto.reading': string;
+  'proto.saving': string;
+  'proto.readSuccess': string;
+  'proto.saveSuccess': string;
+  'proto.readError': string;
+  'proto.saveError': string;
+  'proto.notConnected': string;
+
+  // WiFi tab
+  'wifi.networks': string;
+  'wifi.add': string;
+  'wifi.delete': string;
+  'wifi.deleteAll': string;
+  'wifi.noNetworks': string;
+  'wifi.network': string;
+  'wifi.selectNetwork': string;
+  'wifi.settings': string;
+  'wifi.ssid': string;
+  'wifi.key': string;
+  'wifi.encrypt': string;
+  'wifi.dhcp': string;
+  'wifi.ip': string;
+  'wifi.mask': string;
+  'wifi.gateway': string;
+  'wifi.dns1': string;
+  'wifi.dns2': string;
+  'wifi.encryptNone': string;
+  'wifi.encryptWep64': string;
+  'wifi.encryptWep128': string;
+  'wifi.encryptWpa': string;
+  'wifi.encryptWpa2': string;
+  'wifi.dhcpOn': string;
+  'wifi.dhcpOff': string;
+  'wifi.reading': string;
+  'wifi.saving': string;
+  'wifi.deleting': string;
+  'wifi.readSuccess': string;
+  'wifi.saveSuccess': string;
+  'wifi.deleteSuccess': string;
+  'wifi.readError': string;
+  'wifi.saveError': string;
+  'wifi.deleteError': string;
+  'wifi.notConnected': string;
+  'wifi.maxReached': string;
+  'wifi.confirmDelete': string;
+  'wifi.confirmDeleteAll': string;
+  'wifi.ssidRequired': string;
+
   // Diagnostics tab
   'diag.addTime': string;
   'diag.wordWrap': string;

@@ -315,11 +315,39 @@ export const StatusTab: FC = () => {
             label={t('status.time')}
             value={dt.date && dt.time ? `${dt.date} ${dt.time}` : ''}
           />
-          <Field label={t('status.power')} value={rep.extBattery ? `${rep.extBattery} mV` : ''} />
-          <Field
-            label={t('status.latLon')}
-            value={rep.latitude && rep.longitude ? `${rep.latitude}, ${rep.longitude}` : 'NA, NA'}
-          />
+          {(() => {
+            const mv = parseInt(rep.extBattery, 10);
+            const hasValue = Number.isFinite(mv);
+            const volts = hasValue ? (mv / 1000).toFixed(2) : '';
+            const low = hasValue && mv < 11000;
+            return (
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-zinc-400 text-xs">{t('status.power')}</span>
+                <span
+                  className={`text-xs font-mono ${low ? 'text-red-500 font-semibold' : 'text-zinc-200'}`}
+                >
+                  {hasValue ? `${volts} В` : '—'}
+                </span>
+              </div>
+            );
+          })()}
+          <div className="flex items-center justify-between py-0.5">
+            <span className="text-zinc-400 text-xs">{t('status.latLon')}</span>
+            <span className="text-zinc-200 text-xs font-mono">
+              {rep.latitude && rep.longitude ? (
+                <a
+                  href={`https://www.google.com/maps?q=${rep.latitude},${rep.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  {rep.latitude}, {rep.longitude}
+                </a>
+              ) : (
+                'NA, NA'
+              )}
+            </span>
+          </div>
           <Field label={t('status.satellites')} value={rep.satellites} />
           <Field
             label={t('status.gsmStatus')}

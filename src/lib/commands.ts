@@ -95,3 +95,86 @@ export function buildServerWriteCmd(
 export function buildLogResetCmd(password: string): string {
   return buildCmd(password, 'LOG', ['RESET']);
 }
+
+// ---- Protocol tab commands ----
+
+/** Query a single CTR protocol tag: $PASS;PROTOCOL;GET;1;<ID> — response is 0/1 */
+export function buildProtocolGetCmd(password: string, tagIdHex: string): string {
+  return buildCmd(password, 'PROTOCOL', ['GET', '1', tagIdHex]);
+}
+
+/** Enable tag IDs in CTR protocol: $PASS;PROTOCOL;SET;1;ID1;ID2;... */
+export function buildProtocolSetCmd(password: string, tagIdsHex: string[]): string {
+  return buildCmd(password, 'PROTOCOL', ['SET', '1', ...tagIdsHex]);
+}
+
+/** Disable tag IDs in CTR protocol: $PASS;PROTOCOL;RESET;1;ID1;ID2;... */
+export function buildProtocolResetCmd(password: string, tagIdsHex: string[]): string {
+  return buildCmd(password, 'PROTOCOL', ['RESET', '1', ...tagIdsHex]);
+}
+
+// ---- WiFi tab commands ----
+
+/** Maximum WiFi networks supported in the UI (device allows up to 10). */
+export const WIFI_MAX_NETWORKS = 5;
+
+/** WiFi authentication mode sent with every write (hidden from UI). 2=Shared — matches old configurator. */
+export const WIFI_AUTH_DEFAULT = '2';
+
+/** WiFi channel sent with every write (0 = automatic). */
+export const WIFI_CHANNEL_DEFAULT = '0';
+
+export interface WifiNetworkParams {
+  ssid: string;
+  encrypt: string;  // 0..4
+  key: string;
+  ipMode: string;   // '0' manual, '1' auto
+  ip: string;
+  mask: string;
+  gateway: string;
+  dns1: string;
+  dns2: string;
+}
+
+/** Read network count: $PASS;WIFINET */
+export function buildWifiCountCmd(password: string): string {
+  return buildCmd(password, 'WIFINET');
+}
+
+/** Read one network: $PASS;WIFINETn;GET */
+export function buildWifiNetReadCmd(password: string, index: number): string {
+  return buildCmd(password, `WIFINET${index}`, ['GET']);
+}
+
+function wifiParamFields(n: WifiNetworkParams): string[] {
+  const head = [
+    WIFI_CHANNEL_DEFAULT,
+    n.ssid,
+    WIFI_AUTH_DEFAULT,
+    n.encrypt,
+    n.key,
+    n.ipMode,
+  ];
+  // When DHCP=1 (automatic), omit the IP block entirely.
+  if (n.ipMode === '1') return head;
+  return [...head, n.ip, n.mask, n.gateway, n.dns1, n.dns2];
+}
+
+/**
+ * Write a network (add or edit) at index n:
+ * $PASS;WIFINETn;SET;CHANNEL;SSID;AUTH;ENCRYPT;KEY;IP_MODE[;IP;MASK;GW;DNS1;DNS2]
+ * When IP_MODE=1, IP block is omitted entirely (no trailing empty fields).
+ */
+export function buildWifiNetWriteCmd(password: string, index: number, n: WifiNetworkParams): string {
+  return buildCmd(password, `WIFINET${index}`, ['SET', ...wifiParamFields(n)]);
+}
+
+/** Delete network by index: $PASS;WIFINET;DEL;IDX */
+export function buildWifiDeleteCmd(password: string, index: number): string {
+  return buildCmd(password, 'WIFINET', ['DEL', String(index)]);
+}
+
+/** Delete all networks: $PASS;WIFINET;DEL;ALL */
+export function buildWifiDeleteAllCmd(password: string): string {
+  return buildCmd(password, 'WIFINET', ['DEL', 'ALL']);
+}
