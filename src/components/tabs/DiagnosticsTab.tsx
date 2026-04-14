@@ -56,13 +56,35 @@ export const DiagnosticsTab: FC = () => {
   const logRef = useRef<HTMLPreElement>(null);
   const addTimeRef = useRef(addTime);
   addTimeRef.current = addTime;
+  // True when the last appended char was a line terminator (or log is empty) —
+  // i.e. the next char starts a fresh line and should receive a timestamp.
+  const atLineStartRef = useRef(true);
 
-  // Append text to log (with optional timestamp)
+  // Append text to log. In timestamp mode, we only stamp at the beginning of
+  // each line so that chunked serial data doesn't get a timestamp injected
+  // mid-line.
   const appendLog = useCallback((text: string) => {
     setLog((prev) => {
-      const line = addTimeRef.current ? `${timestamp()} ${text}` : text;
-      const next = prev + line;
-      // Trim if too long
+      let toAppend: string;
+      if (!addTimeRef.current) {
+        toAppend = text;
+        atLineStartRef.current = text.endsWith('\n') || text.endsWith('\r');
+      } else {
+        let out = '';
+        let atStart = atLineStartRef.current;
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          if (atStart && ch !== '\r' && ch !== '\n') {
+            out += `${timestamp()} `;
+            atStart = false;
+          }
+          out += ch;
+          if (ch === '\n') atStart = true;
+        }
+        atLineStartRef.current = atStart;
+        toAppend = out;
+      }
+      const next = prev + toAppend;
       if (next.length > MAX_LOG_LENGTH) {
         return next.slice(next.length - MAX_LOG_LENGTH);
       }
@@ -115,16 +137,10 @@ export const DiagnosticsTab: FC = () => {
     }
   }, [commandInput, isSending, isConnected, password, appendLog, setLastError, t]);
 
-  // Toggle timestamp on device
-  const handleAddTimeToggle = useCallback(async (checked: boolean) => {
+  // Client-side timestamp only — do NOT send LOG;TS to the device.
+  const handleAddTimeToggle = useCallback((checked: boolean) => {
     setAddTime(checked);
-    if (!isConnected) return;
-    try {
-      await window.serial.sendCommand(`$${password};LOG;TS;${checked ? '1' : '0'}`);
-    } catch {
-      // silent
-    }
-  }, [isConnected, password]);
+  }, []);
 
   // Toggle log channel
   const handleChannelToggle = useCallback(async (channel: LogChannel, enable: boolean) => {
@@ -181,6 +197,7 @@ export const DiagnosticsTab: FC = () => {
 
   // Clear log
   const handleClear = useCallback(() => {
+    atLineStartRef.current = true;
     setLog('');
   }, []);
 

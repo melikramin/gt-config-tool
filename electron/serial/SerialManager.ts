@@ -19,7 +19,7 @@ interface QueuedCommand {
   reject: (error: Error) => void;
 }
 
-const DEFAULT_TIMEOUT = 2000;
+const DEFAULT_TIMEOUT = 3000;
 const BAUD_RATE = 115200;
 
 export class SerialManager {
@@ -73,10 +73,15 @@ export class SerialManager {
       this.port.open((err: Error | null) => {
         if (err) {
           reject(new Error(`Failed to open port: ${err.message}`));
-        } else {
+          return;
+        }
+        // Drop any stale bytes the device was streaming before we attached
+        // (e.g. accumulated LOG output) so the first command isn't drowned.
+        this.port?.flush(() => {
+          this.buffer = '';
           this.emitter.emit('connectionChange', true);
           resolve();
-        }
+        });
       });
     });
   }

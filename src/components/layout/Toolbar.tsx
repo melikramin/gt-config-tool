@@ -61,6 +61,7 @@ export const Toolbar: FC = () => {
       try {
         await window.serial.disconnect();
         setConnected(false);
+        setLastError('');
       } catch (err) {
         setLastError(`${t('error.disconnect')} ${(err as Error).message}`);
       }
@@ -73,6 +74,7 @@ export const Toolbar: FC = () => {
       try {
         await window.serial.connect(port, 115200);
         setConnected(true);
+        setLastError('');
       } catch (err) {
         setLastError(`${t('error.connect')} ${(err as Error).message}`);
       } finally {

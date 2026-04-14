@@ -84,6 +84,50 @@ const InputField: FC<{
   </div>
 );
 
+const InlineInput: FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  widthClass?: string;
+}> = ({ label, value, onChange, disabled, placeholder, widthClass = 'w-40' }) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-zinc-400 text-[10px] uppercase tracking-wide">{label}</label>
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      placeholder={placeholder}
+      className={`${widthClass} bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-xs text-zinc-200 disabled:opacity-50 focus:border-blue-500 focus:outline-none`}
+    />
+  </div>
+);
+
+const InlineSelect: FC<{
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  widthClass?: string;
+}> = ({ label, value, options, onChange, disabled, widthClass = 'w-32' }) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-zinc-400 text-[10px] uppercase tracking-wide">{label}</label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className={`${widthClass} bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-xs text-zinc-200 disabled:opacity-50 focus:border-blue-500 focus:outline-none`}
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  </div>
+);
+
 const SelectField: FC<{
   label: string;
   value: string;
@@ -250,7 +294,7 @@ export const ServerTab: FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl">
+    <div className="p-4 space-y-4 max-w-3xl">
       {/* APN Panel — lighter background to distinguish from server */}
       <Panel title={t('server.apnSettings')} className="bg-zinc-900/60 border-zinc-600">
         <InputField
@@ -276,46 +320,60 @@ export const ServerTab: FC = () => {
         />
       </Panel>
 
-      {/* Server 1 Panel */}
-      <Panel title={`${t('server.server')} 1`}>
-        <InputField
-          label={t('server.ip')}
-          value={state.server.ip}
-          onChange={(v) => updateServer('ip', v)}
-          disabled={busy}
-          placeholder="s4.geotek.online"
-        />
-        <InputField
-          label={t('server.port')}
-          value={state.server.port}
-          onChange={(v) => updateServer('port', v)}
-          disabled={busy}
-          placeholder="5601"
-        />
-        <SelectField
-          label={t('server.channel')}
-          value={state.server.channel}
-          options={channelOptions}
-          onChange={(v) => updateServer('channel', v)}
-          disabled={busy}
-        />
-        <SelectField
-          label={t('server.protocol')}
-          value={state.server.protocol}
-          options={protocolOptions}
-          onChange={(v) => updateServer('protocol', v)}
-          disabled={busy}
-        />
-      </Panel>
+      {/* Server 1 & Server 2 side by side */}
+      <div className="flex gap-3">
+        <Panel title={`${t('server.server')} 1`} className="flex-1">
+          <div className="flex flex-wrap items-end gap-2">
+            <InlineInput
+              label={t('server.ip')}
+              value={state.server.ip}
+              onChange={(v) => updateServer('ip', v)}
+              disabled={busy}
+              placeholder="s4.geotek.online"
+              widthClass="w-56"
+            />
+            <InlineInput
+              label={t('server.port')}
+              value={state.server.port}
+              onChange={(v) => updateServer('port', v)}
+              disabled={busy}
+              placeholder="5601"
+              widthClass="w-16"
+            />
+          </div>
+          <div className="flex flex-wrap items-end gap-2 mt-2">
+            <InlineSelect
+              label={t('server.channel')}
+              value={state.server.channel}
+              options={channelOptions}
+              onChange={(v) => updateServer('channel', v)}
+              disabled={busy}
+              widthClass="w-28"
+            />
+            <InlineSelect
+              label={t('server.protocol')}
+              value={state.server.protocol}
+              options={protocolOptions}
+              onChange={(v) => updateServer('protocol', v)}
+              disabled={busy}
+              widthClass="w-28"
+            />
+          </div>
+        </Panel>
 
-      {/* Server 2 Panel — disabled */}
-      <Panel title={`${t('server.server')} 2`} className="opacity-40 pointer-events-none">
-        <InputField label={t('server.ip')} value="" onChange={() => {}} disabled placeholder="—" />
-        <InputField label={t('server.port')} value="" onChange={() => {}} disabled placeholder="—" />
-        <SelectField label={t('server.channel')} value="0" options={channelOptions} onChange={() => {}} disabled />
-        <SelectField label={t('server.protocol')} value="1" options={protocolOptions} onChange={() => {}} disabled />
-        <p className="text-zinc-500 text-[10px] mt-1">{t('server.server2NotSupported')}</p>
-      </Panel>
+        {/* Server 2 Panel — disabled */}
+        <Panel title={`${t('server.server')} 2`} className="flex-1 opacity-40 pointer-events-none">
+          <div className="flex flex-wrap items-end gap-2">
+            <InlineInput label={t('server.ip')} value="" onChange={() => {}} disabled placeholder="—" widthClass="w-56" />
+            <InlineInput label={t('server.port')} value="" onChange={() => {}} disabled placeholder="—" widthClass="w-16" />
+          </div>
+          <div className="flex flex-wrap items-end gap-2 mt-2">
+            <InlineSelect label={t('server.channel')} value="0" options={channelOptions} onChange={() => {}} disabled widthClass="w-28" />
+            <InlineSelect label={t('server.protocol')} value="1" options={protocolOptions} onChange={() => {}} disabled widthClass="w-28" />
+          </div>
+          <p className="text-zinc-500 text-[10px] mt-2">{t('server.server2NotSupported')}</p>
+        </Panel>
+      </div>
 
       {/* Action buttons + status */}
       <div className="flex items-center gap-3">

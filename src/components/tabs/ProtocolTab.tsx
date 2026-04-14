@@ -4,18 +4,15 @@ import { useStatusStore } from '../../stores/statusStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 import {
-  buildProtocolGetCmd,
-  buildProtocolSetCmd,
-  buildProtocolResetCmd,
+  buildPrset20GetCmd,
+  buildPrset21GetCmd,
+  buildPrset20SetCmd,
+  buildPrset21SetCmd,
+  parsePrsetResponse,
+  decodePrsetTags,
+  updatePrsetBuffer,
+  bytesToHex,
 } from '../../lib/commands';
-
-/** Parse `$PROTOCOL;GET;1;<ID>;<0|1>` style response → true if enabled. */
-function parseProtocolGetResponse(raw: string): boolean {
-  const t = raw.trim().replace(/\r?\n$/, '');
-  const parts = t.split(';');
-  const last = (parts[parts.length - 1] ?? '').trim();
-  return last === '1';
-}
 
 // ---- Tag ID definitions (CTR protocol) ----
 
@@ -116,19 +113,22 @@ export const ProtocolTab: FC = () => {
   const { t } = useI18n();
 
   const [enabled, setEnabled] = useState<Set<number>>(new Set());
-  // Remember what was loaded from the device so we only send diffs on save.
   const [initialEnabled, setInitialEnabled] = useState<Set<number>>(new Set());
+  // Raw buffers last read from the device. Preserved so that bits outside
+  // the UI's known tag set are not clobbered on save.
+  const [buf20, setBuf20] = useState<Uint8Array>(() => new Uint8Array(16));
+  const [buf21, setBuf21] = useState<Uint8Array>(() => new Uint8Array(16));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!isConnected) {
       setEnabled(new Set());
       setInitialEnabled(new Set());
+      setBuf20(new Uint8Array(16));
+      setBuf21(new Uint8Array(16));
       setStatusMsg('');
-      setProgress(null);
     }
   }, [isConnected]);
 
@@ -141,25 +141,35 @@ export const ProtocolTab: FC = () => {
     setConnected(false);
   }, [setLastError, setShowPasswordError, setConnected, t]);
 
-  // ---- Read ----
+  // ---- Read (2 commands: PRSET20;GET + PRSET21;GET) ----
   const readSettings = useCallback(async () => {
     if (!isConnected) return;
     setLoading(true);
     setStatusMsg(t('proto.reading'));
-    setProgress({ done: 0, total: ALL_TAG_IDS.length });
 
     try {
+      const resp20 = await window.serial.sendCommand(buildPrset20GetCmd(password));
+      if (isPasswordError(resp20)) { await handlePasswordError(); return; }
+      if (isErrorResponse(resp20)) throw new Error(`PRSET20: ${resp20.trim()}`);
+      const b20 = parsePrsetResponse(resp20);
+      if (!b20) throw new Error(`PRSET20: malformed response`);
+
+      const resp21 = await window.serial.sendCommand(buildPrset21GetCmd(password));
+      if (isPasswordError(resp21)) { await handlePasswordError(); return; }
+      if (isErrorResponse(resp21)) throw new Error(`PRSET21: ${resp21.trim()}`);
+      const b21 = parsePrsetResponse(resp21);
+      if (!b21) throw new Error(`PRSET21: malformed response`);
+
+      const tags20 = decodePrsetTags(b20, 0);
+      const tags21 = decodePrsetTags(b21, 8);
+      // Keep only the tags the UI knows about; unknown bits live in the buffers.
       const loaded = new Set<number>();
-      for (let i = 0; i < ALL_TAG_IDS.length; i++) {
-        const id = ALL_TAG_IDS[i];
-        const resp = await window.serial.sendCommand(buildProtocolGetCmd(password, tagHex(id)));
-        if (isPasswordError(resp)) { await handlePasswordError(); return; }
-        if (!isErrorResponse(resp) && parseProtocolGetResponse(resp)) {
-          loaded.add(id);
-        }
-        setProgress({ done: i + 1, total: ALL_TAG_IDS.length });
+      for (const id of ALL_TAG_IDS) {
+        if (tags20.has(id) || tags21.has(id)) loaded.add(id);
       }
 
+      setBuf20(b20);
+      setBuf21(b21);
       setEnabled(new Set(loaded));
       setInitialEnabled(new Set(loaded));
       setStatusMsg(t('proto.readSuccess'));
@@ -175,31 +185,37 @@ export const ProtocolTab: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 
-  // ---- Save (PROTOCOL;SET / PROTOCOL;RESET, diff-based) ----
+  // ---- Save (2 commands: PRSET20;SET + PRSET21;SET) ----
   const saveSettings = useCallback(async () => {
     if (!isConnected) return;
     setSaving(true);
     setStatusMsg(t('proto.saving'));
 
     try {
-      const toEnable: string[] = [];
-      const toDisable: string[] = [];
+      // Start from the last-read buffers so unknown bits are preserved,
+      // then overlay the UI's known tags from current checkbox state.
+      const next20 = new Uint8Array(buf20);
+      const next21 = new Uint8Array(buf21);
       for (const id of ALL_TAG_IDS) {
-        const was = initialEnabled.has(id);
-        const now = enabled.has(id);
-        if (now && !was) toEnable.push(tagHex(id));
-        else if (!now && was) toDisable.push(tagHex(id));
+        const on = enabled.has(id);
+        if (id < 0x80) updatePrsetBuffer(next20, 0, id, on);
+        else updatePrsetBuffer(next21, 8, id, on);
       }
 
-      if (toEnable.length > 0) {
-        const resp = await window.serial.sendCommand(buildProtocolSetCmd(password, toEnable));
-        if (isPasswordError(resp)) { await handlePasswordError(); return; }
-      }
-      if (toDisable.length > 0) {
-        const resp = await window.serial.sendCommand(buildProtocolResetCmd(password, toDisable));
-        if (isPasswordError(resp)) { await handlePasswordError(); return; }
-      }
+      const resp20 = await window.serial.sendCommand(
+        buildPrset20SetCmd(password, bytesToHex(next20)),
+      );
+      if (isPasswordError(resp20)) { await handlePasswordError(); return; }
+      if (isErrorResponse(resp20)) throw new Error(`PRSET20: ${resp20.trim()}`);
 
+      const resp21 = await window.serial.sendCommand(
+        buildPrset21SetCmd(password, bytesToHex(next21)),
+      );
+      if (isPasswordError(resp21)) { await handlePasswordError(); return; }
+      if (isErrorResponse(resp21)) throw new Error(`PRSET21: ${resp21.trim()}`);
+
+      setBuf20(next20);
+      setBuf21(next21);
       setInitialEnabled(new Set(enabled));
       setStatusMsg(t('proto.saveSuccess'));
     } catch (err) {
@@ -207,7 +223,7 @@ export const ProtocolTab: FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [isConnected, password, enabled, initialEnabled, handlePasswordError, t]);
+  }, [isConnected, password, enabled, buf20, buf21, handlePasswordError, t]);
 
   // ---- State updaters ----
   const toggleTag = useCallback((id: number) => {
@@ -296,11 +312,6 @@ export const ProtocolTab: FC = () => {
           {saving ? t('proto.saving') : t('common.save')}
         </button>
         {statusMsg && <span className="text-xs text-zinc-400">{statusMsg}</span>}
-        {loading && progress && (
-          <span className="text-xs text-zinc-500 font-mono">
-            {progress.done}/{progress.total}
-          </span>
-        )}
       </div>
     </div>
   );

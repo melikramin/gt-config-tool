@@ -178,6 +178,78 @@ export interface Translations {
   'wifi.confirmDeleteAll': string;
   'wifi.ssidRequired': string;
 
+  // GPS tab
+  'gps.panelGps': string;
+  'gps.panelAccel': string;
+  'gps.distance': string;
+  'gps.heading': string;
+  'gps.minSpeed': string;
+  'gps.maxSpeed': string;
+  'gps.minTimeout': string;
+  'gps.drivingInterval': string;
+  'gps.parkingInterval': string;
+  'gps.motion': string;
+  'gps.motionThreshold': string;
+  'gps.shock': string;
+  'gps.shockThreshold': string;
+  'gps.tilt': string;
+  'gps.tiltThreshold': string;
+  'gps.reading': string;
+  'gps.saving': string;
+  'gps.readSuccess': string;
+  'gps.saveSuccess': string;
+  'gps.readError': string;
+  'gps.saveError': string;
+  'gps.notConnected': string;
+
+  // Inputs/Outputs tab
+  'io.panelInputs': string;
+  'io.panelEncoders': string;
+  'io.colInput': string;
+  'io.colMode': string;
+  'io.colNonTriggerZone': string;
+  'io.colTriggerZone': string;
+  'io.colZoneView': string;
+  'io.colPulseReset': string;
+  'io.colFilter': string;
+  'io.colPriority': string;
+  'io.modeDigital': string;
+  'io.modeAnalog': string;
+  'io.modeFrequency': string;
+  'io.modePulse': string;
+  'io.yes': string;
+  'io.no': string;
+  'io.pulsar1': string;
+  'io.pulsar2': string;
+  'io.channelA': string;
+  'io.channelB': string;
+  'io.value': string;
+  'io.reading': string;
+  'io.saving': string;
+  'io.readSuccess': string;
+  'io.saveSuccess': string;
+  'io.readError': string;
+  'io.saveError': string;
+  'io.notConnected': string;
+
+  // RS Interfaces tab
+  'rs.colPort': string;
+  'rs.colDeviceType': string;
+  'rs.colBaudRate': string;
+  'rs.colDataBits': string;
+  'rs.colStopBits': string;
+  'rs.colParity': string;
+  'rs.reading': string;
+  'rs.saving': string;
+  'rs.savingPort': string;
+  'rs.readSuccess': string;
+  'rs.saveSuccess': string;
+  'rs.readError': string;
+  'rs.saveError': string;
+  'rs.notConnected': string;
+  'rs.waitHint': string;
+  'rs.deviceNone': string;
+
   // Diagnostics tab
   'diag.addTime': string;
   'diag.wordWrap': string;
