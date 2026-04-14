@@ -9,6 +9,11 @@ import {
   buildPollingCommands,
   buildOutputCmd,
   buildAddTagCmd,
+  buildDateReadCmd,
+  buildDateWriteCmd,
+  parseDateResponseToUtcMs,
+  formatUtcDateParts,
+  DATE_SYNC_THRESHOLD_MS,
 } from '../../lib/commands';
 import {
   parseDev,
@@ -152,6 +157,15 @@ export const StatusTab: FC = () => {
     }
   }, [debugLog]);
 
+  // Subscribe to raw serial data so we can see exactly what the device sends
+  useEffect(() => {
+    const unsubscribe = window.serial.onRawData((data: string) => {
+      const visible = data.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+      addDebugLine(`RAW ← ${visible}`);
+    });
+    return unsubscribe;
+  }, [addDebugLine]);
+
   // Reset state on disconnect
   useEffect(() => {
     if (!isConnected) {
@@ -172,7 +186,10 @@ export const StatusTab: FC = () => {
         if (cancelled) return;
         try {
           addDebugLine(`TX → ${cmd}`);
-          const response = await window.serial.sendCommand(cmd);
+          // LOG;RESET is the command that stops any active log stream —
+          // give it extra time since it races against the stream it's killing.
+          const isLogReset = /;LOG;RESET\b/i.test(cmd);
+          const response = await window.serial.sendCommand(cmd, isLogReset ? 5000 : undefined);
           addDebugLine(`RX ← ${response}`);
           if (cancelled) return;
           const cmdName = cmd.replace(/^\$[^;]*;/, '').split(';')[0].toUpperCase();
@@ -187,6 +204,31 @@ export const StatusTab: FC = () => {
           addDebugLine(`ERR: ${(err as Error).message}`);
         }
       }
+      // Time sync: read device UTC clock, resync if drift > threshold.
+      if (!cancelled) {
+        try {
+          const dateCmd = buildDateReadCmd(password);
+          addDebugLine(`TX → ${dateCmd}`);
+          const dateResp = await window.serial.sendCommand(dateCmd);
+          addDebugLine(`RX ← ${dateResp}`);
+          const deviceMs = parseDateResponseToUtcMs(dateResp);
+          if (deviceMs !== null) {
+            const now = new Date();
+            const drift = Math.abs(now.getTime() - deviceMs);
+            if (drift > DATE_SYNC_THRESHOLD_MS) {
+              const { ddmmyy, hhmmss } = formatUtcDateParts(now);
+              const writeCmd = buildDateWriteCmd(password, ddmmyy, hhmmss);
+              addDebugLine(`Time drift ${Math.round(drift / 1000)}s — resyncing`);
+              addDebugLine(`TX → ${writeCmd}`);
+              const writeResp = await window.serial.sendCommand(writeCmd);
+              addDebugLine(`RX ← ${writeResp}`);
+            }
+          }
+        } catch (err) {
+          addDebugLine(`ERR: ${(err as Error).message}`);
+        }
+      }
+
       if (!cancelled) {
         addDebugLine('--- Init done, starting polling ---');
         setInitDone(true);
