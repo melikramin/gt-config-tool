@@ -180,28 +180,54 @@ export const StatusTab: FC = () => {
     if (!isConnected) return;
     let cancelled = false;
 
-    const init = async () => {
+    const runInitCommands = async (): Promise<boolean> => {
+      // Returns true if init succeeded, false if device looks stuck.
       const cmds = buildInitCommands(password);
+      let failures = 0;
       for (const cmd of cmds) {
-        if (cancelled) return;
+        if (cancelled) return true;
         try {
           addDebugLine(`TX → ${cmd}`);
-          // LOG;RESET is the command that stops any active log stream —
-          // give it extra time since it races against the stream it's killing.
           const isLogReset = /;LOG;RESET\b/i.test(cmd);
-          const response = await window.serial.sendCommand(cmd, isLogReset ? 5000 : undefined);
+          const response = await window.serial.sendCommand(cmd, isLogReset ? 10000 : undefined);
           addDebugLine(`RX ← ${response}`);
-          if (cancelled) return;
+          if (cancelled) return true;
           const cmdName = cmd.replace(/^\$[^;]*;/, '').split(';')[0].toUpperCase();
           if (cmdName === 'DEV') {
             const dev = parseDev(response);
+            if (!dev.deviceName && !dev.deviceId) failures++;
             setState((prev) => ({ ...prev, dev }));
           } else if (cmdName === 'VER') {
             const ver = parseVer(response);
+            if (!ver.firmwareVersion) failures++;
             setState((prev) => ({ ...prev, ver }));
           }
         } catch (err) {
           addDebugLine(`ERR: ${(err as Error).message}`);
+          failures++;
+        }
+      }
+      return failures === 0;
+    };
+
+    const init = async () => {
+      let ok = await runInitCommands();
+      if (!ok && !cancelled) {
+        // Device is stuck (timeouts or garbled responses). Reboot it
+        // via $<pwd>;RESET, wait for it to come back, then retry once.
+        addDebugLine('--- Init failed, rebooting device ($RESET) ---');
+        try {
+          await window.serial.sendCommand(`$${password};RESET`, 3000);
+        } catch {
+          // RESET often doesn't reply — device just reboots. Ignore.
+        }
+        addDebugLine('--- Waiting 15s for device to come back ---');
+        await new Promise((r) => setTimeout(r, 15000));
+        if (cancelled) return;
+        addDebugLine('--- Retrying init ---');
+        ok = await runInitCommands();
+        if (!ok) {
+          addDebugLine('ERR: Init still failing after reboot. Unplug USB and retry.');
         }
       }
       // Time sync: read device UTC clock, resync if drift > threshold.

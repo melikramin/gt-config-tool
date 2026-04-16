@@ -671,3 +671,316 @@ export function parseTiltResponse(raw: string): TiltParams | null {
     threshold: parts[2] ?? '',
   };
 }
+
+// ---- FLS (LLS) tab commands ----
+
+/** Number of level sensors supported by the device. */
+export const FLS_MAX_SENSORS = 6;
+
+/** Calibration points per sensor (indices 0..39). */
+export const FLS_CALIB_POINTS = 40;
+
+/** Calibration batch size (4 batches of 10 points each). */
+export const FLS_CALIB_BATCH = 10;
+
+/**
+ * LLS sensor settings. The device returns 8 fields (7 writable + 1 read-only tail).
+ * Only the first 6 are documented; the rest are preserved via `extra` and written
+ * back unchanged so we don't clobber unknown state.
+ *
+ * Documented fields: ENABLE, ADDRESS, CAPACITY, LOW, HIGH, SNIFF.
+ */
+export interface LlsSettings {
+  enable: boolean;
+  address: string;    // 1-6
+  type: string;       // undocumented — preserved from read (between ADDRESS and CAPACITY)
+  capacity: string;
+  lowAlarm: string;
+  highAlarm: string;
+  sniff: string;      // 0/1 — hidden UI for now, repurposed as "Product" placeholder
+}
+
+export const EMPTY_LLS: LlsSettings = {
+  enable: false,
+  address: '1',
+  type: '0',
+  capacity: '0',
+  lowAlarm: '0',
+  highAlarm: '0',
+  sniff: '0',
+};
+
+/** Read one sensor: `$PASS;LLSn;GET`. */
+export function buildLlsReadCmd(password: string, index: number): string {
+  return buildCmd(password, `LLS${index}`, ['GET']);
+}
+
+/**
+ * Write one sensor: `$PASS;LLSn;SET;ENABLE;ADDRESS;TYPE;CAPACITY;LOW;HIGH;SNIFF`.
+ * 7 writable fields; last read field (FILTER_MODE, read-only) is dropped.
+ */
+export function buildLlsWriteCmd(password: string, index: number, p: LlsSettings): string {
+  return buildCmd(password, `LLS${index}`, [
+    'SET',
+    p.enable ? '1' : '0',
+    p.address,
+    p.type,
+    p.capacity,
+    p.lowAlarm,
+    p.highAlarm,
+    p.sniff,
+  ]);
+}
+
+/**
+ * Parse `$LLSn;ENABLE;ADDRESS;TYPE;CAPACITY;LOW;HIGH;SNIFF;FILTER_MODE`.
+ * 8 fields total, last is read-only.
+ */
+export function parseLlsSettings(raw: string): LlsSettings | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (!/^LLS\d+$/.test(parts[0] ?? '') || parts.length < 8) return null;
+  return {
+    enable:    parts[1] === '1',
+    address:   parts[2] ?? '1',
+    type:      parts[3] ?? '0',
+    capacity:  parts[4] ?? '0',
+    lowAlarm:  parts[5] ?? '0',
+    highAlarm: parts[6] ?? '0',
+    sniff:     parts[7] ?? '0',
+  };
+}
+
+/** A single calibration point. */
+export interface CalibPoint {
+  raw: string;     // 0-4095
+  volume: string;  // 0-99999
+}
+
+export const EMPTY_CALIB_POINT: CalibPoint = { raw: '0', volume: '0' };
+
+/** Read one calibration point: `$PASS;LLSCALn;GET;idx` → `$LLSCALn;idx;raw;volume`. */
+export function buildLlsCalReadCmd(password: string, sensorIdx: number, pointIdx: number): string {
+  return buildCmd(password, `LLSCAL${sensorIdx}`, ['GET', String(pointIdx)]);
+}
+
+/**
+ * Write a batch of calibration points:
+ * `$PASS;LLSCALn;SET;idx,raw,vol;idx,raw,vol;...` (up to 10 points per command).
+ */
+export function buildLlsCalWriteCmd(
+  password: string,
+  sensorIdx: number,
+  startIdx: number,
+  points: CalibPoint[],
+): string {
+  const triples = points.map((pt, i) => `${startIdx + i},${pt.raw},${pt.volume}`);
+  return buildCmd(password, `LLSCAL${sensorIdx}`, ['SET', ...triples]);
+}
+
+/**
+ * Parse `$LLSCALn;idx,raw,volume` → CalibPoint. The payload after the command
+ * prefix is a single comma-separated triple (not semicolon-separated).
+ * Returns null on malformed input.
+ */
+export function parseLlsCalResponse(raw: string): CalibPoint | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (!/^LLSCAL\d+$/.test(parts[0] ?? '') || parts.length < 2) return null;
+  const triple = (parts[1] ?? '').split(',');
+  if (triple.length < 3) return null;
+  return {
+    raw:    triple[1] ?? '0',
+    volume: triple[2] ?? '0',
+  };
+}
+
+// ---- Pumps (TRK) tab commands ----
+
+/** Number of pumps shown in the UI (device supports 8, UI shows 4). */
+export const PUMP_COUNT = 4;
+
+/**
+ * Pump type dropdown values (0-15).
+ */
+export const PUMP_TYPES: Array<{ value: string; label: string }> = [
+  { value: '0',  label: '0 — Disabled' },
+  { value: '1',  label: '1 — PULSER' },
+  { value: '2',  label: '2 — ISKRA' },
+  { value: '3',  label: '3 — LCR' },
+  { value: '4',  label: '4 — AVKO' },
+  { value: '5',  label: '5 — ASN' },
+  { value: '6',  label: '6 — TOPAZ' },
+  { value: '7',  label: '7 — DART' },
+  { value: '8',  label: '8 — SANKI' },
+  { value: '9',  label: '9 — KUP' },
+  { value: '10', label: '10 — ML' },
+  { value: '11', label: '11 — BUI' },
+  { value: '12', label: '12 — EMIS' },
+  { value: '13', label: '13 — TEX' },
+  { value: '14', label: '14 — EAGLE' },
+  { value: '15', label: '15 — UNIPUMP' },
+];
+
+/** Russian labels for pump types (used when locale=ru). */
+export const PUMP_TYPES_RU: Array<{ value: string; label: string }> = [
+  { value: '0',  label: '0 — Выключен' },
+  { value: '1',  label: '1 — PULSER' },
+  { value: '2',  label: '2 — ISKRA' },
+  { value: '3',  label: '3 — LCR' },
+  { value: '4',  label: '4 — AVKO' },
+  { value: '5',  label: '5 — ASN' },
+  { value: '6',  label: '6 — TOPAZ' },
+  { value: '7',  label: '7 — DART' },
+  { value: '8',  label: '8 — SANKI' },
+  { value: '9',  label: '9 — KUP' },
+  { value: '10', label: '10 — ML' },
+  { value: '11', label: '11 — BUI' },
+  { value: '12', label: '12 — EMIS' },
+  { value: '13', label: '13 — TEX' },
+  { value: '14', label: '14 — EAGLE' },
+  { value: '15', label: '15 — UNIPUMP' },
+];
+
+/**
+ * Pump INPUT dropdown values: 1-6 (digital inputs) + E1, E2 (encoders).
+ */
+export const PUMP_INPUT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+  { value: '5', label: '5' },
+  { value: '6', label: '6' },
+  { value: 'E1', label: 'E1' },
+  { value: 'E2', label: 'E2' },
+];
+
+/** Product dropdown values (1-4). */
+export const PUMP_PRODUCT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+];
+
+/** Relay 1 dropdown values (1-4). */
+export const PUMP_RELAY1_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+];
+
+/** Relay 2 dropdown values (0=off, 1-4). */
+export const PUMP_RELAY2_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '0', label: '0 — Disabled' },
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+];
+
+/** Relay 2 dropdown — Russian labels. */
+export const PUMP_RELAY2_OPTIONS_RU: Array<{ value: string; label: string }> = [
+  { value: '0', label: '0 — Выключен' },
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+];
+
+/**
+ * Pump settings. Device response has up to 17 fields after command prefix.
+ * Field [10] (total) is read-only; the rest are writable.
+ *
+ * Fields: TYPE, INPUT, PRODUCT, OUTPUT, RFID_ID, PULSE, START_TOUT, STOP_TOUT,
+ *         RFID_TOUT, TOTAL(ro), 2ND_OUT, 2ND_START, 2ND_STOP, RFID_MODE, ROUND, PRICE
+ */
+export interface PumpParams {
+  type: string;        // [1] 0=NO, 1=PULSER, etc.
+  input: string;       // [2] 1-8 or E1-E4
+  product: string;     // [3] 1-4
+  output: string;      // [4] relay 1 (1-4)
+  rfidId: string;      // [5] 12 hex chars
+  pulse: string;       // [6] imp/L float, 0-2000
+  startTout: string;   // [7] 0-120 sec
+  stopTout: string;    // [8] 0-120 sec
+  rfidTout: string;    // [9] 0-120 sec
+  total: string;       // [10] read-only totalizer
+  secondOut: string;   // [11] relay 2 (0-4)
+  secondStart: string; // [12] float L
+  secondStop: string;  // [13] float L
+  rfidMode: string;    // [14] 0/1 passive RFID
+  round: string;       // [15] float
+  price: string;       // [16] float
+  extra: string[];     // any undocumented trailing fields
+}
+
+export const EMPTY_PUMP: PumpParams = {
+  type: '0',
+  input: '1',
+  product: '1',
+  output: '1',
+  rfidId: '000000000000',
+  pulse: '0',
+  startTout: '0',
+  stopTout: '0',
+  rfidTout: '0',
+  total: '0',
+  secondOut: '0',
+  secondStart: '0',
+  secondStop: '0',
+  rfidMode: '0',
+  round: '0',
+  price: '0',
+  extra: [],
+};
+
+/** Read pump config: `$PASS;PUMPn` */
+export function buildPumpReadCmd(password: string, index: number): string {
+  return buildCmd(password, `PUMP${index}`);
+}
+
+/**
+ * Write pump config: `$PASS;PUMPn;TYPE;INPUT;PRODUCT;OUTPUT;RFID_ID;PULSE;
+ * START_TOUT;STOP_TOUT;RFID_TOUT;TOTAL;2ND_OUT;2ND_START;2ND_STOP;RFID_MODE;ROUND;PRICE`.
+ * TOTAL is read-only but must be included in the write to maintain field positions.
+ */
+export function buildPumpWriteCmd(password: string, index: number, p: PumpParams): string {
+  return buildCmd(password, `PUMP${index}`, [
+    p.type, p.input, p.product, p.output, p.rfidId,
+    p.pulse, p.startTout, p.stopTout, p.rfidTout,
+    p.total, p.secondOut, p.secondStart, p.secondStop,
+    p.rfidMode, p.round, p.price, ...p.extra,
+  ]);
+}
+
+/**
+ * Parse `$PUMPn;TYPE;INPUT;PRODUCT;OUTPUT;RFID_ID;PULSE;START_TOUT;STOP_TOUT;
+ * RFID_TOUT;TOTAL;2ND_OUT;2ND_START;2ND_STOP;RFID_MODE;ROUND;PRICE[;extra...]`.
+ */
+export function parsePumpResponse(raw: string): PumpParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (!/^PUMP\d+$/.test(parts[0] ?? '') || parts.length < 17) return null;
+  return {
+    type:        parts[1] ?? '0',
+    input:       parts[2] ?? '1',
+    product:     parts[3] ?? '1',
+    output:      parts[4] ?? '1',
+    rfidId:      parts[5] ?? '000000000000',
+    pulse:       parts[6] ?? '0',
+    startTout:   parts[7] ?? '0',
+    stopTout:    parts[8] ?? '0',
+    rfidTout:    parts[9] ?? '0',
+    total:       parts[10] ?? '0',
+    secondOut:   parts[11] ?? '0',
+    secondStart: parts[12] ?? '0',
+    secondStop:  parts[13] ?? '0',
+    rfidMode:    parts[14] ?? '0',
+    round:       parts[15] ?? '0',
+    price:       parts[16] ?? '0',
+    extra:       parts.slice(17),
+  };
+}
