@@ -5,7 +5,7 @@ import { useI18n } from '../../i18n';
 
 export const StatusBar: FC = () => {
   const { isConnected, port } = useConnectionStore();
-  const { lastError, progress, progressText } = useStatusStore();
+  const { lastError, lastErrorIsSuccess, progress, progressText } = useStatusStore();
   const { t } = useI18n();
 
   return (
@@ -38,9 +38,9 @@ export const StatusBar: FC = () => {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Last error */}
+      {/* Last message */}
       {lastError && (
-        <span className="text-red-400 truncate max-w-md" title={lastError}>
+        <span className={`${lastErrorIsSuccess ? 'text-green-400' : 'text-red-400'} truncate max-w-md`} title={lastError}>
           {lastError}
         </span>
       )}

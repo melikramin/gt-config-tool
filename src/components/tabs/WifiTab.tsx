@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import {
   buildWifiCountCmd,
@@ -129,11 +130,30 @@ export const WifiTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
-  const [networks, setNetworks] = useState<NetworkEntry[]>([]);
-  const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  const storeWifi = useSettingsStore((s) => s.wifiNetworks);
+
+  const [networks, setNetworks] = useState<NetworkEntry[]>(() => {
+    if (storeWifi) {
+      return storeWifi.map((d, i) => ({ uid: `idx-${i + 1}`, index: i + 1, data: d }));
+    }
+    return [];
+  });
+  const [selectedUid, setSelectedUid] = useState<string | null>(() => {
+    if (storeWifi && storeWifi.length > 0) return 'idx-1';
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeWifi) {
+      const entries = storeWifi.map((d, i) => ({ uid: `idx-${i + 1}`, index: i + 1, data: d }));
+      setNetworks(entries);
+      setSelectedUid(entries.length > 0 ? entries[0]!.uid : null);
+    }
+  }, [storeWifi]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -173,6 +193,7 @@ export const WifiTab: FC = () => {
 
       setNetworks(entries);
       setSelectedUid(entries.length > 0 ? entries[0]!.uid : null);
+      useSettingsStore.getState().setWifiSettings(entries.map((e) => e.data));
       setStatusMsg(t('wifi.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('wifi.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -182,7 +203,7 @@ export const WifiTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readAll();
+    if (isConnected && !useSettingsStore.getState().wifiNetworks) readAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 

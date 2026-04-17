@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 import {
@@ -185,12 +186,23 @@ export const GpsTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
-  const [filter, setFilter] = useState<FilterParams>(EMPTY_FILTER);
-  const [msens, setMsens] = useState<MsensParams>(EMPTY_MSENS);
-  const [tilt, setTilt] = useState<TiltParams>(EMPTY_TILT);
+  const storeFilter = useSettingsStore((s) => s.gpsFilter);
+  const storeMsens = useSettingsStore((s) => s.gpsMsens);
+  const storeTilt = useSettingsStore((s) => s.gpsTilt);
+
+  const [filter, setFilter] = useState<FilterParams>(() => storeFilter || EMPTY_FILTER);
+  const [msens, setMsens] = useState<MsensParams>(() => storeMsens || EMPTY_MSENS);
+  const [tilt, setTilt] = useState<TiltParams>(() => storeTilt || EMPTY_TILT);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeFilter) setFilter(storeFilter);
+    if (storeMsens) setMsens(storeMsens);
+    if (storeTilt) setTilt(storeTilt);
+  }, [storeFilter, storeMsens, storeTilt]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -235,6 +247,7 @@ export const GpsTab: FC = () => {
       setFilter(f);
       setMsens(m);
       setTilt(tp);
+      useSettingsStore.getState().setGpsSettings(f, m, tp);
       setStatusMsg(t('gps.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('gps.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -244,7 +257,7 @@ export const GpsTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readSettings();
+    if (isConnected && !useSettingsStore.getState().gpsFilter) readSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 

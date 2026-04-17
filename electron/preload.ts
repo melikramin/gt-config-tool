@@ -65,6 +65,9 @@ const dialogApi = {
   saveFile: (content: string, defaultName: string): Promise<boolean> => {
     return ipcRenderer.invoke('dialog:saveFile', content, defaultName);
   },
+  openFile: (): Promise<string | null> => {
+    return ipcRenderer.invoke('dialog:openFile');
+  },
 };
 
 contextBridge.exposeInMainWorld('serial', serialApi);

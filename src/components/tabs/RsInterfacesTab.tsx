@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect, useMemo } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import {
   RS_PORTS,
@@ -61,13 +62,26 @@ export const RsInterfacesTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
+  const storeRsPorts = useSettingsStore((s) => s.rsPorts);
+  const storeRsAvail = useSettingsStore((s) => s.rsAvailable);
+
   const [ports, setPorts] = useState<RsPortParams[]>(() =>
-    RS_PORTS.map(() => ({ ...EMPTY_RS_PORT, extra: [] })),
+    storeRsPorts || RS_PORTS.map(() => ({ ...EMPTY_RS_PORT, extra: [] })),
   );
-  const [available, setAvailable] = useState<boolean[]>(() => RS_PORTS.map(() => true));
+  const [available, setAvailable] = useState<boolean[]>(() =>
+    storeRsAvail || RS_PORTS.map(() => true),
+  );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeRsPorts && storeRsAvail) {
+      setPorts(storeRsPorts);
+      setAvailable(storeRsAvail);
+    }
+  }, [storeRsPorts, storeRsAvail]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -109,6 +123,7 @@ export const RsInterfacesTab: FC = () => {
       }
       setPorts(next);
       setAvailable(avail);
+      useSettingsStore.getState().setRsSettings(next, avail);
       setStatusMsg(t('rs.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('rs.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -118,7 +133,7 @@ export const RsInterfacesTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readAll();
+    if (isConnected && !useSettingsStore.getState().rsPorts) readAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 

@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import {
   buildInCountCmd,
@@ -137,15 +138,30 @@ export const InputsOutputsTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
+  const storeInputs = useSettingsStore((s) => s.inputs);
+  const storeInputCount = useSettingsStore((s) => s.inputCount);
+  const storeEnc1 = useSettingsStore((s) => s.encoder1);
+  const storeEnc2 = useSettingsStore((s) => s.encoder2);
+
   const [inputs, setInputs] = useState<InputParams[]>(() =>
-    Array.from({ length: MAX_INPUTS }, () => ({ ...EMPTY_INPUT })),
+    storeInputs || Array.from({ length: MAX_INPUTS }, () => ({ ...EMPTY_INPUT })),
   );
-  const [activeCount, setActiveCount] = useState(0);
-  const [enc1, setEnc1] = useState<EncoderParams>(EMPTY_ENCODER);
-  const [enc2, setEnc2] = useState<EncoderParams>({ ...EMPTY_ENCODER, pinA: '3', pinB: '4' });
+  const [activeCount, setActiveCount] = useState(storeInputCount ?? 0);
+  const [enc1, setEnc1] = useState<EncoderParams>(storeEnc1 || EMPTY_ENCODER);
+  const [enc2, setEnc2] = useState<EncoderParams>(storeEnc2 || { ...EMPTY_ENCODER, pinA: '3', pinB: '4' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeInputs && storeInputCount !== null) {
+      setInputs(storeInputs);
+      setActiveCount(storeInputCount);
+    }
+    if (storeEnc1) setEnc1(storeEnc1);
+    if (storeEnc2) setEnc2(storeEnc2);
+  }, [storeInputs, storeInputCount, storeEnc1, storeEnc2]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -200,6 +216,7 @@ export const InputsOutputsTab: FC = () => {
       if (!e2) throw new Error('ENCODER2: malformed response');
       setEnc2(e2);
 
+      useSettingsStore.getState().setInputsSettings(count, next, e1, e2);
       setStatusMsg(t('io.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('io.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -209,7 +226,7 @@ export const InputsOutputsTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readSettings();
+    if (isConnected && !useSettingsStore.getState().inputs) readSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 

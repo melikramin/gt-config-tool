@@ -2,6 +2,7 @@ import { type FC, useState, useCallback, useEffect, useMemo, useRef } from 'reac
 import * as XLSX from 'xlsx';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import {
   FLS_MAX_SENSORS,
@@ -437,13 +438,20 @@ export const FlsTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
+  const storeFls = useSettingsStore((s) => s.flsSensors);
+
   const [sensors, setSensors] = useState<LlsSettings[]>(() =>
-    Array.from({ length: FLS_MAX_SENSORS }, () => ({ ...EMPTY_LLS })),
+    storeFls || Array.from({ length: FLS_MAX_SENSORS }, () => ({ ...EMPTY_LLS })),
   );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [calibSensor, setCalibSensor] = useState<number | null>(null);
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeFls) setSensors(storeFls);
+  }, [storeFls]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -477,6 +485,7 @@ export const FlsTab: FC = () => {
         if (p) next[i - 1] = p;
       }
       setSensors(next);
+      useSettingsStore.getState().setFlsSettings(next);
       setStatusMsg(t('fls.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('fls.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -486,7 +495,7 @@ export const FlsTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readSettings();
+    if (isConnected && !useSettingsStore.getState().flsSensors) readSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 

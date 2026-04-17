@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect, useMemo } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import {
   PUMP_COUNT,
@@ -12,10 +13,17 @@ import {
   PUMP_RELAY2_OPTIONS,
   PUMP_RELAY2_OPTIONS_RU,
   EMPTY_PUMP,
+  EMPTY_PUMP_FORMAT,
+  PUMP_FORMAT_OPTIONS,
+  PUMP_FORMAT_LEN_OPTIONS,
   buildPumpReadCmd,
   buildPumpWriteCmd,
+  buildPumpFormatReadCmd,
+  buildPumpFormatWriteCmd,
   parsePumpResponse,
+  parsePumpFormatResponse,
   type PumpParams,
+  type PumpFormatParams,
 } from '../../lib/commands';
 
 // ---- Helpers ----
@@ -371,6 +379,134 @@ const PumpForm: FC<PumpFormProps> = ({ pumps, activePumpIdx, onChange, disabled 
   );
 };
 
+// ---- Pump Format Dialog ----
+
+interface PumpFormatDialogProps {
+  pumpIndex: number;
+  format: PumpFormatParams;
+  open: boolean;
+  onClose: () => void;
+  password: string;
+  isConnected: boolean;
+  onSaved: (fmt: PumpFormatParams) => void;
+}
+
+const PumpFormatDialog: FC<PumpFormatDialogProps> = ({
+  pumpIndex, format: initial, open, onClose, password, isConnected, onSaved,
+}) => {
+  const { t } = useI18n();
+  const { setLastError, setShowPasswordError } = useStatusStore();
+  const { setConnected } = useConnectionStore();
+
+  const [fmt, setFmt] = useState<PumpFormatParams>({ ...initial });
+  const [saving, setSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+
+  /** Return options list, adding current value if it's non-standard. */
+  const fmtOptions = useCallback((current: string) => {
+    const isKnown = PUMP_FORMAT_OPTIONS.some((o) => o.value === current);
+    if (isKnown) return PUMP_FORMAT_OPTIONS;
+    return [{ value: current, label: current }, ...PUMP_FORMAT_OPTIONS];
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setFmt({ ...initial });
+      setStatusMsg('');
+    }
+  }, [open, initial]);
+
+  const handleSave = useCallback(async () => {
+    if (!isConnected) return;
+    setSaving(true);
+    setStatusMsg(t('pumps.formatSaving'));
+    try {
+      const resp = await window.serial.sendCommand(
+        buildPumpFormatWriteCmd(password, pumpIndex + 1, fmt),
+      );
+      if (isPasswordError(resp)) {
+        setLastError(t('error.wrongPassword'));
+        setShowPasswordError(true);
+        try { await window.serial.disconnect(); } catch { /* ignore */ }
+        setConnected(false);
+        return;
+      }
+      if (isErrorResponse(resp)) throw new Error(resp.trim());
+      onSaved(fmt);
+      onClose();
+    } catch (err) {
+      setStatusMsg(`${t('pumps.formatSaveError')}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [isConnected, password, pumpIndex, fmt, onSaved, setLastError, setShowPasswordError, setConnected, t]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-4 min-w-[420px] relative">
+        <button
+          onClick={onClose}
+          disabled={saving}
+          className="absolute top-2 right-3 text-zinc-500 hover:text-zinc-200 text-lg leading-none"
+        >
+          ✕
+        </button>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-3">
+          {t('pumps.formatTitle')} — PUMP {pumpIndex + 1}
+        </h3>
+        <div className="flex items-end gap-3">
+          <Field label={t('pumps.formatVolume')}>
+            <Select
+              value={fmt.valueFmt}
+              options={fmtOptions(fmt.valueFmt)}
+              onChange={(v) => setFmt((p) => ({ ...p, valueFmt: v }))}
+              disabled={saving}
+              className="w-20"
+            />
+          </Field>
+          <Field label={t('pumps.formatTotalizer')}>
+            <Select
+              value={fmt.totalFmt}
+              options={fmtOptions(fmt.totalFmt)}
+              onChange={(v) => setFmt((p) => ({ ...p, totalFmt: v }))}
+              disabled={saving}
+              className="w-20"
+            />
+          </Field>
+          <Field label={t('pumps.formatPreset')}>
+            <Select
+              value={fmt.limitFmt}
+              options={fmtOptions(fmt.limitFmt)}
+              onChange={(v) => setFmt((p) => ({ ...p, limitFmt: v }))}
+              disabled={saving}
+              className="w-20"
+            />
+          </Field>
+          <Field label={t('pumps.formatDoseLen')}>
+            <Select
+              value={fmt.limitLen}
+              options={PUMP_FORMAT_LEN_OPTIONS}
+              onChange={(v) => setFmt((p) => ({ ...p, limitLen: v }))}
+              disabled={saving}
+              className="w-16"
+            />
+          </Field>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? '...' : t('pumps.formatOk')}
+          </button>
+        </div>
+        {statusMsg && <p className="text-xs text-zinc-400 mt-2">{statusMsg}</p>}
+      </div>
+    </div>
+  );
+};
+
 // ---- Main tab ----
 
 export const PumpsTab: FC = () => {
@@ -378,17 +514,34 @@ export const PumpsTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
+  const storePumps = useSettingsStore((s) => s.pumps);
+  const storeFormats = useSettingsStore((s) => s.pumpFormats);
+
   const [pumps, setPumps] = useState<PumpParams[]>(() =>
-    Array.from({ length: PUMP_COUNT }, () => ({ ...EMPTY_PUMP })),
+    storePumps || Array.from({ length: PUMP_COUNT }, () => ({ ...EMPTY_PUMP })),
+  );
+  const [formats, setFormats] = useState<PumpFormatParams[]>(() =>
+    storeFormats || Array.from({ length: PUMP_COUNT }, () => ({ ...EMPTY_PUMP_FORMAT })),
   );
   const [activePump, setActivePump] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [formatDialogOpen, setFormatDialogOpen] = useState(false);
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storePumps) setPumps(storePumps);
+  }, [storePumps]);
+
+  useEffect(() => {
+    if (storeFormats) setFormats(storeFormats);
+  }, [storeFormats]);
 
   useEffect(() => {
     if (!isConnected) {
       setPumps(Array.from({ length: PUMP_COUNT }, () => ({ ...EMPTY_PUMP })));
+      setFormats(Array.from({ length: PUMP_COUNT }, () => ({ ...EMPTY_PUMP_FORMAT })));
       setStatusMsg('');
     }
   }, [isConnected]);
@@ -414,6 +567,20 @@ export const PumpsTab: FC = () => {
         if (p) next[i - 1] = p;
       }
       setPumps(next);
+      useSettingsStore.getState().setPumpsSettings(next);
+
+      // Read pump formats
+      const fmts = Array.from({ length: PUMP_COUNT }, () => ({ ...EMPTY_PUMP_FORMAT }));
+      for (let i = 1; i <= PUMP_COUNT; i++) {
+        const fResp = await window.serial.sendCommand(buildPumpFormatReadCmd(password, i));
+        if (isPasswordError(fResp)) { await handlePasswordError(); return; }
+        if (isErrorResponse(fResp)) continue;
+        const f = parsePumpFormatResponse(fResp);
+        if (f) fmts[i - 1] = f;
+      }
+      setFormats(fmts);
+      useSettingsStore.getState().setPumpFormats(fmts);
+
       setStatusMsg(t('pumps.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('pumps.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -423,7 +590,7 @@ export const PumpsTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readSettings();
+    if (isConnected && (!useSettingsStore.getState().pumps || !useSettingsStore.getState().pumpFormats)) readSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 
@@ -498,7 +665,7 @@ export const PumpsTab: FC = () => {
         disabled={busy}
       />
 
-      {/* Read / Save buttons */}
+      {/* Read / Save / Format buttons */}
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={readSettings}
@@ -514,9 +681,35 @@ export const PumpsTab: FC = () => {
         >
           {saving ? t('pumps.saving') : t('common.save')}
         </button>
+        <button
+          onClick={() => setFormatDialogOpen(true)}
+          disabled={busy || pumps[activePump].type === '0'}
+          className="px-4 py-1.5 text-xs font-medium rounded bg-zinc-700 text-zinc-200 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {t('pumps.formatTitle')}
+        </button>
         {statusMsg && <span className="text-xs text-zinc-400">{statusMsg}</span>}
       </div>
 
+      {/* Pump Format Dialog */}
+      <PumpFormatDialog
+        pumpIndex={activePump}
+        format={formats[activePump]}
+        open={formatDialogOpen}
+        onClose={() => setFormatDialogOpen(false)}
+        password={password}
+        isConnected={isConnected}
+        onSaved={(fmt) => {
+          setFormats((prev) => {
+            const next = prev.slice();
+            next[activePump] = fmt;
+            return next;
+          });
+          useSettingsStore.getState().setPumpFormats(
+            formats.map((f, i) => i === activePump ? fmt : f),
+          );
+        }}
+      />
     </div>
   );
 };

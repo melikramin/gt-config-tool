@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import {
   buildApnReadCmd,
@@ -157,10 +158,25 @@ export const ServerTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
-  const [state, setState] = useState<ServerTabState>(INITIAL_STATE);
+  const storeApn = useSettingsStore((s) => s.serverApn);
+  const storeSrv = useSettingsStore((s) => s.serverData);
+
+  const [state, setState] = useState<ServerTabState>(() => {
+    if (storeApn && storeSrv) {
+      return { apn: storeApn, server: { ip: storeSrv.ip, port: storeSrv.port, channel: storeSrv.channel, protocol: storeSrv.protocol } };
+    }
+    return INITIAL_STATE;
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeApn && storeSrv) {
+      setState({ apn: storeApn, server: { ip: storeSrv.ip, port: storeSrv.port, channel: storeSrv.channel, protocol: storeSrv.protocol } });
+    }
+  }, [storeApn, storeSrv]);
 
   // Reset on disconnect
   useEffect(() => {
@@ -210,6 +226,13 @@ export const ServerTab: FC = () => {
           : { ...EMPTY_SERVER },
       });
 
+      // Update central store
+      useSettingsStore.getState().setServerSettings(apnData, srv1 || {
+        serverProp: '0F', protoProp: '01', ip: '', port: '', login: '', pass: '',
+        timeout1: '10', timeout2: '0', timeout3: '120', timeout4: '30',
+        ipProto: '1', channel: '0', protocol: '1',
+      });
+
       setStatusMsg(t('server.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('server.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -218,9 +241,9 @@ export const ServerTab: FC = () => {
     }
   }, [isConnected, password, handlePasswordError, t]);
 
-  // Auto-read on connect
+  // Auto-read on connect only if store doesn't have data yet
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && !useSettingsStore.getState().serverApn) {
       readSettings();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
