@@ -984,3 +984,718 @@ export function parsePumpResponse(raw: string): PumpParams | null {
     extra:       parts.slice(17),
   };
 }
+
+// ---- Pump Format (PUMPFRMT) commands ----
+
+/**
+ * Pump format params: VALUE_FMT, TOTAL_FMT, LIMIT_FMT, LIMIT_LEN.
+ * The first three store actual float values as strings (e.g. "0.010", "0.100", "1.000").
+ * Device returns/accepts the same float values.
+ * LIMIT_LEN is the number of digits for the dose (3-6).
+ */
+export interface PumpFormatParams {
+  valueFmt: string;   // [1] actual float value
+  totalFmt: string;   // [2] actual float value
+  limitFmt: string;   // [3] actual float value
+  limitLen: string;   // [4] 3-6
+}
+
+export const EMPTY_PUMP_FORMAT: PumpFormatParams = {
+  valueFmt: '1',
+  totalFmt: '1',
+  limitFmt: '1',
+  limitLen: '6',
+};
+
+/** Standard dropdown options — multiplier for displayed value. */
+export const PUMP_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '0.01', label: '0.01' },
+  { value: '0.1',  label: '0.1' },
+  { value: '1',    label: '1' },
+  { value: '10',   label: '10' },
+  { value: '100',  label: '100' },
+];
+
+/** Options for LIMIT_LEN dropdown. */
+export const PUMP_FORMAT_LEN_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '3', label: '3' },
+  { value: '4', label: '4' },
+  { value: '5', label: '5' },
+  { value: '6', label: '6' },
+];
+
+/** Known format values. */
+const PUMP_FMT_KNOWN = [0.01, 0.1, 1, 10, 100];
+
+/** Normalize device float to a clean value string. */
+function normalizeFmtValue(s: string): string {
+  const n = parseFloat(s);
+  if (!Number.isFinite(n)) return '1';
+  for (const known of PUMP_FMT_KNOWN) {
+    if (Math.abs(n - known) < 0.001) return String(known);
+  }
+  // Unknown value — return as-is, no trailing zeros
+  return parseFloat(n.toFixed(3)).toString();
+}
+
+// ---- Keyboard (UIM / UIMX) tab commands ----
+
+/**
+ * UIM settings. Response has 16 fields after the command prefix.
+ * Fields: ENABLE, KEYPAD, REQ_PUMP, REQ_LIMIT, REQ_VEHID, REQ_ODO, REQ_PIN,
+ *         KEY_SOUND, TERM_SOUND, GREETING, GOODBYE, TAG_SEARCH,
+ *         CHECK_VID, PROJECT_ID, COMPARE_ODO, ENGINE
+ */
+export interface UimParams {
+  enable: boolean;       // [1]
+  keypad: boolean;       // [2]
+  reqPump: boolean;      // [3]
+  reqLimit: boolean;     // [4]
+  reqVehid: boolean;     // [5]
+  reqOdo: boolean;       // [6]
+  reqPin: boolean;       // [7]
+  keySound: boolean;     // [8]
+  termSound: boolean;    // [9]
+  greeting: string;      // [10] max 16 ASCII chars
+  goodbye: string;       // [11] max 16 ASCII chars
+  tagSearch: string;     // [12] max 16 ASCII chars
+  checkVid: boolean;     // [13]
+  projectId: boolean;    // [14]
+  compareOdo: boolean;   // [15]
+  engine: boolean;       // [16]
+}
+
+export const EMPTY_UIM: UimParams = {
+  enable: false,
+  keypad: false,
+  reqPump: false,
+  reqLimit: false,
+  reqVehid: false,
+  reqOdo: false,
+  reqPin: false,
+  keySound: false,
+  termSound: false,
+  greeting: '',
+  goodbye: '',
+  tagSearch: '',
+  checkVid: false,
+  projectId: false,
+  compareOdo: false,
+  engine: false,
+};
+
+/** UIMX extended settings. 2 fields: DRIVER_TAG_TYPE, ALLOW_DRIVER_CODE. */
+export interface UimxParams {
+  driverTagType: boolean;    // [1]
+  allowDriverCode: boolean;  // [2]
+}
+
+export const EMPTY_UIMX: UimxParams = {
+  driverTagType: false,
+  allowDriverCode: false,
+};
+
+/** Read UIM: `$PASS;UIM` */
+export function buildUimReadCmd(password: string): string {
+  return buildCmd(password, 'UIM');
+}
+
+/** Write UIM: `$PASS;UIM;ENABLE;KEYPAD;REQ_PUMP;...;ENGINE` (16 fields). */
+export function buildUimWriteCmd(password: string, p: UimParams): string {
+  const b = (v: boolean) => (v ? '1' : '0');
+  return buildCmd(password, 'UIM', [
+    b(p.enable), b(p.keypad), b(p.reqPump), b(p.reqLimit),
+    b(p.reqVehid), b(p.reqOdo), b(p.reqPin),
+    b(p.keySound), b(p.termSound),
+    p.greeting, p.goodbye, p.tagSearch,
+    b(p.checkVid), b(p.projectId), b(p.compareOdo), b(p.engine),
+  ]);
+}
+
+/**
+ * Parse `$UIM;ENABLE;KEYPAD;...;ENGINE` response.
+ * Text fields (GREETING, GOODBYE, TAG_SEARCH) are trimmed of padding spaces.
+ */
+export function parseUimResponse(raw: string): UimParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'UIM' || parts.length < 17) return null;
+  return {
+    enable:     parts[1] === '1',
+    keypad:     parts[2] === '1',
+    reqPump:    parts[3] === '1',
+    reqLimit:   parts[4] === '1',
+    reqVehid:   parts[5] === '1',
+    reqOdo:     parts[6] === '1',
+    reqPin:     parts[7] === '1',
+    keySound:   parts[8] === '1',
+    termSound:  parts[9] === '1',
+    greeting:   (parts[10] ?? '').trim(),
+    goodbye:    (parts[11] ?? '').trim(),
+    tagSearch:  (parts[12] ?? '').trim(),
+    checkVid:   parts[13] === '1',
+    projectId:  parts[14] === '1',
+    compareOdo: parts[15] === '1',
+    engine:     parts[16] === '1',
+  };
+}
+
+/** Read UIMX: `$PASS;UIMX` */
+export function buildUimxReadCmd(password: string): string {
+  return buildCmd(password, 'UIMX');
+}
+
+/** Write UIMX: `$PASS;UIMX;DRIVER_TAG_TYPE;ALLOW_DRIVER_CODE` */
+export function buildUimxWriteCmd(password: string, p: UimxParams): string {
+  const b = (v: boolean) => (v ? '1' : '0');
+  return buildCmd(password, 'UIMX', [b(p.driverTagType), b(p.allowDriverCode)]);
+}
+
+/** Parse `$UIMX;DRIVER_TAG_TYPE;ALLOW_DRIVER_CODE`. */
+export function parseUimxResponse(raw: string): UimxParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'UIMX' || parts.length < 3) return null;
+  return {
+    driverTagType:   parts[1] === '1',
+    allowDriverCode: parts[2] === '1',
+  };
+}
+
+/** Read pump format: `$PASS;PUMPFRMTn` */
+export function buildPumpFormatReadCmd(password: string, index: number): string {
+  return buildCmd(password, `PUMPFRMT${index}`);
+}
+
+/** Write pump format: `$PASS;PUMPFRMTn;VALUE;TOTAL;LIMIT;LIMIT_LEN` */
+export function buildPumpFormatWriteCmd(password: string, index: number, f: PumpFormatParams): string {
+  return buildCmd(password, `PUMPFRMT${index}`, [f.valueFmt, f.totalFmt, f.limitFmt, f.limitLen]);
+}
+
+/**
+ * Parse `$PUMPFRMTn;VALUE;TOTAL;LIMIT;LIMIT_LEN`.
+ * Stores actual float values; known values normalized (0.01, 0.1, 1).
+ */
+export function parsePumpFormatResponse(raw: string): PumpFormatParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (!/^PUMPFRMT\d+$/.test(parts[0] ?? '') || parts.length < 5) return null;
+  return {
+    valueFmt: normalizeFmtValue(parts[1] ?? '1'),
+    totalFmt: normalizeFmtValue(parts[2] ?? '1'),
+    limitFmt: normalizeFmtValue(parts[3] ?? '1'),
+    limitLen: String(Math.round(parseFloat(parts[4] ?? '6'))),
+  };
+}
+
+// ---- Security tab commands (EMSTOP / TAGCFG / BYPASS / PUMPSEC) ----
+
+/**
+ * Emergency stop settings.
+ * Read/Write: `$PASS;EMSTOP[;ENABLE;INPUT;LEVEL;OPERATOR_CHECK]`
+ */
+export interface EmstopParams {
+  enable: boolean;       // [1]
+  input: string;         // [2] input number (1-8)
+  level: boolean;        // [3] invert
+  operatorCheck: boolean; // [4]
+}
+
+export const EMPTY_EMSTOP: EmstopParams = {
+  enable: false,
+  input: '2',
+  level: false,
+  operatorCheck: false,
+};
+
+export function buildEmstopReadCmd(password: string): string {
+  return buildCmd(password, 'EMSTOP');
+}
+
+export function buildEmstopWriteCmd(password: string, p: EmstopParams): string {
+  const b = (v: boolean) => (v ? '1' : '0');
+  return buildCmd(password, 'EMSTOP', [b(p.enable), p.input, b(p.level), b(p.operatorCheck)]);
+}
+
+/** Parse `$EMSTOP;ENABLE;INPUT;LEVEL;OPERATOR_CHECK`. */
+export function parseEmstopResponse(raw: string): EmstopParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'EMSTOP' || parts.length < 5) return null;
+  return {
+    enable:        parts[1] === '1',
+    input:         parts[2] ?? '2',
+    level:         parts[3] === '1',
+    operatorCheck: parts[4] === '1',
+  };
+}
+
+/**
+ * Tag authorization config.
+ * Read/Write: `$PASS;TAGCFG[;MODE;MASK;SAVE_SD]`
+ */
+export interface TagcfgParams {
+  mode: string;    // [1] 0=Memory, 1=Memory+Filter, 2=AnyTag
+  mask: string;    // [2] 12-char hex mask (e.g. xxxxxxxxxxxx)
+  saveSd: boolean; // [3]
+}
+
+export const EMPTY_TAGCFG: TagcfgParams = {
+  mode: '0',
+  mask: 'xxxxxxxxxxxx',
+  saveSd: false,
+};
+
+/** TAGCFG mode values (labels are i18n keys: sec.tagcfgMode0, sec.tagcfgMode1, sec.tagcfgMode2). */
+export const TAGCFG_MODE_VALUES = ['0', '1', '2'] as const;
+
+export function buildTagcfgReadCmd(password: string): string {
+  return buildCmd(password, 'TAGCFG');
+}
+
+export function buildTagcfgWriteCmd(password: string, p: TagcfgParams): string {
+  return buildCmd(password, 'TAGCFG', [p.mode, p.mask, p.saveSd ? '1' : '0']);
+}
+
+/** Parse `$TAGCFG;MODE;MASK;SAVE_SD`. */
+export function parseTagcfgResponse(raw: string): TagcfgParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'TAGCFG' || parts.length < 4) return null;
+  return {
+    mode:   parts[1] ?? '0',
+    mask:   parts[2] ?? 'xxxxxxxxxxxx',
+    saveSd: parts[3] === '1',
+  };
+}
+
+/**
+ * Bypass settings.
+ * Read/Write: `$PASS;BYPASS[;ENABLE;MOTION;MIN_THRESHOLD]`
+ */
+export interface BypassParams {
+  enable: boolean;       // [1]
+  motion: boolean;       // [2]
+  minThreshold: string;  // [3] float
+}
+
+export const EMPTY_BYPASS: BypassParams = {
+  enable: false,
+  motion: false,
+  minThreshold: '1.0',
+};
+
+export function buildBypassReadCmd(password: string): string {
+  return buildCmd(password, 'BYPASS');
+}
+
+export function buildBypassWriteCmd(password: string, p: BypassParams): string {
+  const b = (v: boolean) => (v ? '1' : '0');
+  return buildCmd(password, 'BYPASS', [b(p.enable), b(p.motion), p.minThreshold]);
+}
+
+/** Parse `$BYPASS;ENABLE;MOTION;MIN_THRESHOLD`. */
+export function parseBypassResponse(raw: string): BypassParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'BYPASS' || parts.length < 4) return null;
+  return {
+    enable:       parts[1] === '1',
+    motion:       parts[2] === '1',
+    minThreshold: parts[3] ?? '1.0',
+  };
+}
+
+/**
+ * Pump security settings.
+ * Read: `$PUMPSEC;f1..f10` (10 fields). Write: 9 fields (last is read-only).
+ *
+ * Fields:
+ * [1] MAX_DOZE_EN, [2] LOW_LVL_EN, [3] LOW_LVL_THRESH, [4] MAX_DOZE_THRESH,
+ * [5] ALARM_EN, [6] ALARM_OUTPUT, [7] ALARM_TIMER,
+ * [8] AUTH_TYPE (hex bitmask), [9] AUTH_METHOD (0/1/2),
+ * [10] ONLINE_TIMEOUT (read-only)
+ */
+export interface PumpsecParams {
+  maxDozeEn: boolean;      // [1]
+  lowLvlEn: boolean;       // [2]
+  lowLvlThresh: string;    // [3]
+  maxDozeThresh: string;   // [4]
+  alarmEn: boolean;        // [5]
+  alarmOutput: string;     // [6] output number
+  alarmTimer: string;      // [7] seconds
+  authType: string;        // [8] hex bitmask (e.g. '1f', '3f')
+  authMethod: string;      // [9] 0=Offline, 1=Online, 2=Online/Offline
+  onlineTimeout: string;   // [10] read-only
+}
+
+export const EMPTY_PUMPSEC: PumpsecParams = {
+  maxDozeEn: false,
+  lowLvlEn: false,
+  lowLvlThresh: '0',
+  maxDozeThresh: '0',
+  alarmEn: false,
+  alarmOutput: '4',
+  alarmTimer: '0',
+  authType: '1f',
+  authMethod: '0',
+  onlineTimeout: '15',
+};
+
+/**
+ * AUTH_TYPE dropdown: predefined bitmask combinations.
+ * Bit0=All, Bit1=Code, Bit2=iButton, Bit3=RFID, Bit4=Remote.
+ */
+export const PUMPSEC_AUTH_TYPES: Array<{ value: string; label: string }> = [
+  { value: '02', label: '02 — UI keypad' },
+  { value: '04', label: '04 — iButton' },
+  { value: '06', label: '06 — iButton + UI' },
+  { value: '08', label: '08 — RFID' },
+  { value: '0a', label: '0a — RFID + UI' },
+  { value: '1a', label: '1a — RFID + UI + Remote' },
+  { value: '1c', label: '1c — RFID + iButton + Remote' },
+  { value: '1f', label: '1f — All types' },
+  { value: '3f', label: '3f — All types' },
+];
+
+/** AUTH_METHOD values (labels are i18n keys: sec.authMethod0, sec.authMethod1, sec.authMethod2). */
+export const PUMPSEC_AUTH_METHOD_VALUES = ['0', '1', '2'] as const;
+
+export function buildPumpsecReadCmd(password: string): string {
+  return buildCmd(password, 'PUMPSEC');
+}
+
+/** Write 9 fields (drop read-only onlineTimeout). */
+export function buildPumpsecWriteCmd(password: string, p: PumpsecParams): string {
+  const b = (v: boolean) => (v ? '1' : '0');
+  return buildCmd(password, 'PUMPSEC', [
+    b(p.maxDozeEn), b(p.lowLvlEn), p.lowLvlThresh, p.maxDozeThresh,
+    b(p.alarmEn), p.alarmOutput, p.alarmTimer,
+    p.authType, p.authMethod,
+  ]);
+}
+
+/**
+ * Parse `$PUMPSEC;f1;f2;f3;f4;f5;f6;f7;f8;f9;f10`.
+ * 10 fields total; last (onlineTimeout) is read-only.
+ */
+export function parsePumpsecResponse(raw: string): PumpsecParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'PUMPSEC' || parts.length < 10) return null;
+  return {
+    maxDozeEn:      parts[1] === '1',
+    lowLvlEn:       parts[2] === '1',
+    lowLvlThresh:   parts[3] ?? '0',
+    maxDozeThresh:  parts[4] ?? '0',
+    alarmEn:        parts[5] === '1',
+    alarmOutput:    parts[6] ?? '4',
+    alarmTimer:     parts[7] ?? '0',
+    authType:       parts[8] ?? '1f',
+    authMethod:     parts[9] ?? '0',
+    onlineTimeout:  parts[10] ?? '15',
+  };
+}
+
+// ---- Printer tab commands (PRINTER / PRNTN / PRNTP / PRNTW) ----
+
+/**
+ * Printer settings.
+ * Read: `$PRINTER;CONTROL;LANG;TIME_SHIFT;DTR_GPIO` (4 fields, last read-only).
+ * Write: `$PASS;PRINTER;SET;CONTROL;LANG;TIME_SHIFT` (3 fields).
+ */
+export interface PrinterParams {
+  control: string;    // [1] 00=Off, 01=On, 02=AutoPrint, 03=AUTO Receipt
+  lang: string;       // [2] 0=English, 1=Russian
+  timeShift: string;  // [3] e.g. "+3", "-5"
+  dtrGpio: string;    // [4] read-only
+}
+
+export const EMPTY_PRINTER: PrinterParams = {
+  control: '00',
+  lang: '0',
+  timeShift: '+0',
+  dtrGpio: '0',
+};
+
+/** CONTROL dropdown values. */
+export const PRINTER_CONTROL_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '00', label: 'Disabled' },
+  { value: '01', label: 'Enabled' },
+  { value: '03', label: 'Auto Print' },
+];
+
+export const PRINTER_CONTROL_OPTIONS_RU: Array<{ value: string; label: string }> = [
+  { value: '00', label: 'Выключен' },
+  { value: '01', label: 'Включен' },
+  { value: '03', label: 'Автопечать' },
+];
+
+/** LANG dropdown values. */
+export const PRINTER_LANG_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '0', label: 'English' },
+  { value: '1', label: 'Russian' },
+];
+
+export const PRINTER_LANG_OPTIONS_RU: Array<{ value: string; label: string }> = [
+  { value: '0', label: 'English' },
+  { value: '1', label: 'RUSSIAN' },
+];
+
+/** TIME_SHIFT dropdown: -12 to +12. */
+export const PRINTER_TIME_SHIFT_OPTIONS: Array<{ value: string; label: string }> =
+  Array.from({ length: 25 }, (_, i) => {
+    const v = i - 12;
+    const s = v > 0 ? `+${v}` : String(v);
+    return { value: s, label: s };
+  });
+
+/** Printer text fields (station name, phone, website). */
+export interface PrinterTextFields {
+  stationName: string;
+  phone: string;
+  website: string;
+}
+
+export const EMPTY_PRINTER_TEXT: PrinterTextFields = {
+  stationName: '',
+  phone: '',
+  website: '',
+};
+
+/** Read printer config: `$PASS;PRINTER;GET` */
+export function buildPrinterReadCmd(password: string): string {
+  return buildCmd(password, 'PRINTER', ['GET']);
+}
+
+/** Write printer config: `$PASS;PRINTER;SET;CONTROL;LANG;TIME_SHIFT` */
+export function buildPrinterWriteCmd(password: string, p: PrinterParams): string {
+  return buildCmd(password, 'PRINTER', ['SET', p.control, p.lang, p.timeShift]);
+}
+
+/** Parse `$PRINTER;CONTROL;LANG;TIME_SHIFT;DTR_GPIO`. */
+export function parsePrinterResponse(raw: string): PrinterParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'PRINTER' || parts.length < 4) return null;
+  return {
+    control:   parts[1] ?? '00',
+    lang:      parts[2] ?? '0',
+    timeShift: parts[3] ?? '+0',
+    dtrGpio:   parts[4] ?? '0',
+  };
+}
+
+/**
+ * Decode PRNTN/PRNTP/PRNTW hex payload: `LLDDDDDDDD` → string.
+ * LL = 2 decimal digits (byte count), DD = UTF-16 code points as 4 hex digits each.
+ */
+export function decodePrinterHexText(payload: string): string {
+  if (payload.length < 2) return '';
+  const hexData = payload.slice(2);
+  let result = '';
+  for (let i = 0; i + 3 < hexData.length; i += 4) {
+    const code = parseInt(hexData.slice(i, i + 4), 16);
+    if (Number.isFinite(code) && code > 0) {
+      result += String.fromCharCode(code);
+    }
+  }
+  return result;
+}
+
+/**
+ * Encode string to `LLDDDDDDDD` format for PRNTN/PRNTP/PRNTW write.
+ * LL = byte count (string.length * 2), DD = each char as 4-hex-digit code point.
+ */
+export function encodePrinterHexText(text: string): string {
+  const byteLen = text.length * 2;
+  const ll = String(byteLen).padStart(2, '0');
+  let hex = '';
+  for (let i = 0; i < text.length; i++) {
+    hex += text.charCodeAt(i).toString(16).padStart(4, '0');
+  }
+  return ll + hex;
+}
+
+/** Read station name: `$PASS;PRNTN` */
+export function buildPrntnReadCmd(password: string): string {
+  return buildCmd(password, 'PRNTN');
+}
+
+/** Write station name: `$PASS;PRNTN;LLDDDD...` */
+export function buildPrntnWriteCmd(password: string, text: string): string {
+  return buildCmd(password, 'PRNTN', [encodePrinterHexText(text)]);
+}
+
+/** Parse `$PRNTN;LLDDDD...` → decoded text. */
+export function parsePrntnResponse(raw: string): string | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'PRNTN' || parts.length < 2) return null;
+  return decodePrinterHexText(parts[1] ?? '');
+}
+
+/** Read phone: `$PASS;PRNTP` */
+export function buildPrntpReadCmd(password: string): string {
+  return buildCmd(password, 'PRNTP');
+}
+
+/** Write phone: `$PASS;PRNTP;LLDDDD...` */
+export function buildPrntpWriteCmd(password: string, text: string): string {
+  return buildCmd(password, 'PRNTP', [encodePrinterHexText(text)]);
+}
+
+/** Parse `$PRNTP;LLDDDD...` → decoded text. */
+export function parsePrntpResponse(raw: string): string | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'PRNTP' || parts.length < 2) return null;
+  return decodePrinterHexText(parts[1] ?? '');
+}
+
+/** Read website: `$PASS;PRNTW` */
+export function buildPrntwReadCmd(password: string): string {
+  return buildCmd(password, 'PRNTW');
+}
+
+/** Write website: `$PASS;PRNTW;LLDDDD...` */
+export function buildPrntwWriteCmd(password: string, text: string): string {
+  return buildCmd(password, 'PRNTW', [encodePrinterHexText(text)]);
+}
+
+/** Parse `$PRNTW;LLDDDD...` → decoded text. */
+export function parsePrntwResponse(raw: string): string | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'PRNTW' || parts.length < 2) return null;
+  return decodePrinterHexText(parts[1] ?? '');
+}
+
+/** Print last transaction: `$PASS;PRINTER;MAKE` */
+export function buildPrinterMakeCmd(password: string): string {
+  return buildCmd(password, 'PRINTER', ['MAKE']);
+}
+
+// ---- Tags/Keys tab commands (TAG / TAGS) ----
+
+/** Empty tag ID — indicates an unused slot. */
+export const TAG_EMPTY_ID = 'FFFFFFFFFFFF';
+
+/**
+ * Single tag entry read from the device.
+ * Response: `$TAG;ID;PARAM1;PARAM2;PARAM3;INDEX`
+ */
+export interface TagEntry {
+  index: number;       // 1-based slot index
+  tagId: string;       // 12 hex chars (6 bytes)
+  limit: number;       // -1 = exhausted, 0 = unlimited, 1-9999
+  param2: number;      // bitmask byte (fuel types + operator + driver flags)
+  pin: number;         // 0-9999
+}
+
+export const EMPTY_TAG: TagEntry = {
+  index: 0,
+  tagId: TAG_EMPTY_ID,
+  limit: 0,
+  param2: 0,
+  pin: 0,
+};
+
+/** Read tag count / limit: `$PASS;TAGS` → `$TAGS;MEMORY;LIMIT;ADDED` */
+export function buildTagsCountCmd(password: string): string {
+  return buildCmd(password, 'TAGS');
+}
+
+/**
+ * Parse TAGS response: `$TAGS;MEMORY;LIMIT;ADDED`.
+ * Returns { memory, limit, added } or null.
+ */
+export function parseTagsResponse(raw: string): { memory: number; limit: number; added: number } | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'TAGS' || parts.length < 4) return null;
+  const memory = parseInt(parts[1] ?? '0', 10);
+  const limit = parseInt(parts[2] ?? '0', 10);
+  const added = parseInt(parts[3] ?? '0', 10);
+  if (!Number.isFinite(memory) || !Number.isFinite(limit) || !Number.isFinite(added)) return null;
+  return { memory, limit, added };
+}
+
+/** Read tag by index (1-based): `$PASS;TAG;GETI;index` */
+export function buildTagGetByIndexCmd(password: string, index: number): string {
+  return buildCmd(password, 'TAG', ['GETI', String(index)]);
+}
+
+/**
+ * Parse TAG;GETI response.
+ * Short format:    `$TAG;ID;PARAM1;PARAM2;PARAM3;INDEX`
+ * Extended (SD):   `$TAG;ID;PARAM1;PARAM2;PARAM3;;...extra...;INDEX`
+ *
+ * We always take the first 5 fields (TAG,ID,P1,P2,P3) and the **last** field as INDEX.
+ * Returns TagEntry or null on malformed input.
+ */
+export function parseTagGetResponse(raw: string): TagEntry | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'TAG' || parts.length < 6) return null;
+  const tagId = (parts[1] ?? '').toUpperCase();
+  if (!/^[0-9A-F]{12}$/.test(tagId)) return null;
+  const limit = parseInt(parts[2] ?? '0', 10);
+  const param2 = parseInt(parts[3] ?? '0', 16); // hex byte
+  const pin = parseInt(parts[4] ?? '0', 10);
+  // Index is always the last field (handles both short and extended SD responses)
+  const index = parseInt(parts[parts.length - 1] ?? '0', 10);
+  if (!Number.isFinite(limit) || !Number.isFinite(param2) || !Number.isFinite(pin) || !Number.isFinite(index)) return null;
+  return { index, tagId, limit, param2, pin };
+}
+
+/**
+ * Write tag by index (1-based):
+ * `$PASS;TAG;ADDI;INDEX;TAG_ID;PARAM1;PARAM2;PARAM3`
+ */
+export function buildTagAddByIndexCmd(
+  password: string,
+  index: number,
+  tagId: string,
+  limit: number,
+  param2: number,
+  pin: number,
+): string {
+  const p2hex = param2.toString(16).toUpperCase().padStart(2, '0');
+  return buildCmd(password, 'TAG', ['ADDI', String(index), tagId, String(limit), p2hex, String(pin)]);
+}
+
+/** Delete a tag by ID: `$PASS;TAG;DEL;TAG_ID` */
+export function buildTagDeleteCmd(password: string, tagId: string): string {
+  return buildCmd(password, 'TAG', ['DEL', tagId]);
+}
+
+/** Decode PARAM2 bitmask into individual flags. */
+export function decodeTagParam2(param2: number): {
+  fuel1: boolean; fuel2: boolean; fuel3: boolean; fuel4: boolean;
+  operator: boolean; driver: boolean;
+} {
+  return {
+    fuel1: (param2 & 0x01) === 0,     // bit 0: 0=yes, 1=no
+    fuel2: (param2 & 0x02) === 0,     // bit 1
+    fuel3: (param2 & 0x04) === 0,     // bit 2
+    fuel4: (param2 & 0x08) === 0,     // bit 3
+    operator: (param2 & 0x10) !== 0,  // bit 4 (5th bit): 1=yes
+    driver: (param2 & 0x20) !== 0,    // bit 5 (6th bit): 1=yes
+  };
+}
+
+/** Encode individual flags back into PARAM2 bitmask. */
+export function encodeTagParam2(flags: {
+  fuel1: boolean; fuel2: boolean; fuel3: boolean; fuel4: boolean;
+  operator: boolean; driver: boolean;
+}): number {
+  let v = 0;
+  if (!flags.fuel1) v |= 0x01;  // 0=yes → set bit means NO
+  if (!flags.fuel2) v |= 0x02;
+  if (!flags.fuel3) v |= 0x04;
+  if (!flags.fuel4) v |= 0x08;
+  if (flags.operator) v |= 0x10;
+  if (flags.driver) v |= 0x20;
+  return v;
+}

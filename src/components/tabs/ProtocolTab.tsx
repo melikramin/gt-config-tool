@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect, useMemo } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 import {
@@ -112,15 +113,39 @@ export const ProtocolTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
-  const [enabled, setEnabled] = useState<Set<number>>(new Set());
-  const [initialEnabled, setInitialEnabled] = useState<Set<number>>(new Set());
-  // Raw buffers last read from the device. Preserved so that bits outside
-  // the UI's known tag set are not clobbered on save.
-  const [buf20, setBuf20] = useState<Uint8Array>(() => new Uint8Array(16));
-  const [buf21, setBuf21] = useState<Uint8Array>(() => new Uint8Array(16));
+  const storeBuf20 = useSettingsStore((s) => s.protoBuf20);
+  const storeBuf21 = useSettingsStore((s) => s.protoBuf21);
+
+  const [enabled, setEnabled] = useState<Set<number>>(() => {
+    if (storeBuf20 && storeBuf21) {
+      const tags20 = decodePrsetTags(storeBuf20, 0);
+      const tags21 = decodePrsetTags(storeBuf21, 8);
+      const loaded = new Set<number>();
+      for (const id of ALL_TAG_IDS) { if (tags20.has(id) || tags21.has(id)) loaded.add(id); }
+      return loaded;
+    }
+    return new Set();
+  });
+  const [initialEnabled, setInitialEnabled] = useState<Set<number>>(() => new Set(enabled));
+  const [buf20, setBuf20] = useState<Uint8Array>(() => storeBuf20 ? new Uint8Array(storeBuf20) : new Uint8Array(16));
+  const [buf21, setBuf21] = useState<Uint8Array>(() => storeBuf21 ? new Uint8Array(storeBuf21) : new Uint8Array(16));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  // Populate from store when readAllSettings finishes
+  useEffect(() => {
+    if (storeBuf20 && storeBuf21) {
+      const tags20 = decodePrsetTags(storeBuf20, 0);
+      const tags21 = decodePrsetTags(storeBuf21, 8);
+      const loaded = new Set<number>();
+      for (const id of ALL_TAG_IDS) { if (tags20.has(id) || tags21.has(id)) loaded.add(id); }
+      setBuf20(new Uint8Array(storeBuf20));
+      setBuf21(new Uint8Array(storeBuf21));
+      setEnabled(loaded);
+      setInitialEnabled(new Set(loaded));
+    }
+  }, [storeBuf20, storeBuf21]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -172,6 +197,7 @@ export const ProtocolTab: FC = () => {
       setBuf21(b21);
       setEnabled(new Set(loaded));
       setInitialEnabled(new Set(loaded));
+      useSettingsStore.getState().setProtocolSettings(b20, b21);
       setStatusMsg(t('proto.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('proto.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -181,7 +207,7 @@ export const ProtocolTab: FC = () => {
   }, [isConnected, password, handlePasswordError, t]);
 
   useEffect(() => {
-    if (isConnected) readSettings();
+    if (isConnected && !useSettingsStore.getState().protoBuf20) readSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 

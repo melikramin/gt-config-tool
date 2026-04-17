@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
-import { writeFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { SerialManager } from './serial/SerialManager';
 
@@ -113,6 +113,19 @@ ipcMain.handle('dialog:saveFile', async (_event, content: string, defaultName: s
   if (canceled || !filePath) return false;
   writeFileSync(filePath, content, 'utf8');
   return true;
+});
+
+ipcMain.handle('dialog:openFile', async (_event, filters?: { name: string; extensions: string[] }[]) => {
+  if (!mainWindow) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    filters: filters ?? [
+      { name: 'Text Files', extensions: ['txt', 'log', 'gtcfg'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return readFileSync(filePaths[0], 'utf8');
 });
 
 // --- App lifecycle ---

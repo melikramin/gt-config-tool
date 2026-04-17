@@ -23,6 +23,7 @@ export interface SerialApi {
 
 export interface DialogApi {
   saveFile(content: string, defaultName: string): Promise<boolean>;
+  openFile(): Promise<string | null>;
 }
 
 declare global {

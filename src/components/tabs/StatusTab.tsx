@@ -1,6 +1,7 @@
 import { type FC, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -120,6 +121,8 @@ const Panel: FC<{ title: string; children: React.ReactNode; className?: string }
 export const StatusTab: FC = () => {
   const { password, isConnected, setConnected, setDeviceImei } = useConnectionStore();
   const { setLastError, setShowPasswordError } = useStatusStore();
+  const isReadingAll = useSettingsStore((s) => s.isReadingAll);
+  const isWritingAll = useSettingsStore((s) => s.isWritingAll);
   const { t, locale } = useI18n();
 
   const [state, setState] = useState<StatusState>(INITIAL_STATE);
@@ -328,7 +331,7 @@ export const StatusTab: FC = () => {
     });
   }, [addDebugLine]);
 
-  usePolling(pollingCommands, isConnected && initDone, handleResponse, 200, 50, handlePasswordError);
+  usePolling(pollingCommands, isConnected && initDone && !isReadingAll && !isWritingAll, handleResponse, 200, 50, handlePasswordError);
 
   // Toggle output ON/OFF
   const handleOutputToggle = useCallback(async (index: number, on: boolean) => {
