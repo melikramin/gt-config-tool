@@ -26,9 +26,51 @@ export interface DialogApi {
   openFile(): Promise<string | null>;
 }
 
+export type FirmwareMode =
+  | { mode: 'boot'; mountPath: string; label: string }
+  | { mode: 'dfu'; name: string; status: string };
+
+export interface FirmwareApi {
+  pickFile(): Promise<{ path: string; name: string } | null>;
+  waitForBootDrive(timeoutMs: number): Promise<{ mountPath: string; label: string }>;
+  copyToBoot(srcPath: string, destDir: string): Promise<string>;
+  waitForMode(timeoutMs: number): Promise<FirmwareMode>;
+  launchDfuSeDemo(): Promise<void>;
+}
+
+export interface UpdateAvailablePayload {
+  version: string;
+  releaseNotes: string | null;
+  releaseDate: string | null;
+  isPortable: boolean;
+  releaseUrl?: string;
+}
+
+export interface DownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
+export interface UpdaterApi {
+  check(): Promise<boolean>;
+  download(): Promise<boolean>;
+  installAndRestart(): Promise<void>;
+  isPortable(): Promise<boolean>;
+  openReleasePage(url?: string): Promise<void>;
+  onAvailable(cb: (info: UpdateAvailablePayload) => void): () => void;
+  onNotAvailable(cb: () => void): () => void;
+  onProgress(cb: (p: DownloadProgress) => void): () => void;
+  onDownloaded(cb: () => void): () => void;
+  onError(cb: (msg: string) => void): () => void;
+}
+
 declare global {
   interface Window {
     serial: SerialApi;
     dialog: DialogApi;
+    firmware: FirmwareApi;
+    updater: UpdaterApi;
   }
 }

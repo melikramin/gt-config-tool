@@ -1,6 +1,7 @@
 import { type FC, useState, useEffect, useRef, useCallback } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useDiagnosticsStore } from '../../stores/diagnosticsStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 
@@ -29,68 +30,32 @@ const LOG_CHANNELS: LogChannel[] = [
   { id: 'rs485b', labelKey: 'diag.channelRs485b', code: '17' },
 ];
 
-const MAX_LOG_LENGTH = 200_000; // characters
-
-function timestamp(): string {
-  const d = new Date();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  const ms = String(d.getMilliseconds()).padStart(3, '0');
-  return `[${hh}:${mm}:${ss}.${ms}]`;
-}
-
 export const DiagnosticsTab: FC = () => {
   const { password, isConnected } = useConnectionStore();
   const { setLastError } = useStatusStore();
+  const {
+    log,
+    commandInput,
+    enabledChannels,
+    appendLog: appendLogStore,
+    clearLog,
+    setCommandInput,
+    setEnabledChannels,
+  } = useDiagnosticsStore();
   const { t } = useI18n();
 
-  const [log, setLog] = useState('');
-  const [commandInput, setCommandInput] = useState('');
   const [addTime, setAddTime] = useState(false);
   const [wordWrap, setWordWrap] = useState(true);
-  const [enabledChannels, setEnabledChannels] = useState<Set<string>>(new Set());
   const [autoScroll, setAutoScroll] = useState(true);
   const [isSending, setIsSending] = useState(false);
 
   const logRef = useRef<HTMLPreElement>(null);
   const addTimeRef = useRef(addTime);
   addTimeRef.current = addTime;
-  // True when the last appended char was a line terminator (or log is empty) —
-  // i.e. the next char starts a fresh line and should receive a timestamp.
-  const atLineStartRef = useRef(true);
 
-  // Append text to log. In timestamp mode, we only stamp at the beginning of
-  // each line so that chunked serial data doesn't get a timestamp injected
-  // mid-line.
   const appendLog = useCallback((text: string) => {
-    setLog((prev) => {
-      let toAppend: string;
-      if (!addTimeRef.current) {
-        toAppend = text;
-        atLineStartRef.current = text.endsWith('\n') || text.endsWith('\r');
-      } else {
-        let out = '';
-        let atStart = atLineStartRef.current;
-        for (let i = 0; i < text.length; i++) {
-          const ch = text[i];
-          if (atStart && ch !== '\r' && ch !== '\n') {
-            out += `${timestamp()} `;
-            atStart = false;
-          }
-          out += ch;
-          if (ch === '\n') atStart = true;
-        }
-        atLineStartRef.current = atStart;
-        toAppend = out;
-      }
-      const next = prev + toAppend;
-      if (next.length > MAX_LOG_LENGTH) {
-        return next.slice(next.length - MAX_LOG_LENGTH);
-      }
-      return next;
-    });
-  }, []);
+    appendLogStore(text, addTimeRef.current);
+  }, [appendLogStore]);
 
   // Subscribe to raw serial data
   useEffect(() => {
@@ -195,18 +160,10 @@ export const DiagnosticsTab: FC = () => {
     }
   }, [log, setLastError, t]);
 
-  // Clear log
+  // Clear log (user-initiated only — never clear automatically)
   const handleClear = useCallback(() => {
-    atLineStartRef.current = true;
-    setLog('');
-  }, []);
-
-  // Reset channels on disconnect
-  useEffect(() => {
-    if (!isConnected) {
-      setEnabledChannels(new Set());
-    }
-  }, [isConnected]);
+    clearLog();
+  }, [clearLog]);
 
   return (
     <div className="flex flex-col h-full">
@@ -287,9 +244,13 @@ export const DiagnosticsTab: FC = () => {
         <input
           type="text"
           value={commandInput}
-          onChange={(e) => setCommandInput(e.target.value)}
+          onChange={(e) => setCommandInput(e.target.value.toUpperCase())}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
           placeholder={t('diag.commandPlaceholder')}
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
           className="flex-1 bg-zinc-800 text-zinc-200 text-sm border border-zinc-600 rounded px-2 py-1 font-mono placeholder:text-zinc-600"
         />
         <button

@@ -1,6 +1,6 @@
 {
   "name": "gt9-configurator",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Desktop application for configuring Geotek GT-series devices via USB COM port",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -8,7 +8,9 @@
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && tsc -p tsconfig.node.json && node scripts/electron-dev.js",
     "build": "tsc -p tsconfig.node.json && vite build && electron-builder",
-    "build:electron": "tsc -p tsconfig.node.json"
+    "build:electron": "tsc -p tsconfig.node.json",
+    "release": "tsc -p tsconfig.node.json && vite build && electron-builder --publish always",
+    "release:draft": "tsc -p tsconfig.node.json && vite build && electron-builder --publish onTagOrDraft"
   },
   "keywords": [
     "geotek",
@@ -19,6 +21,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "serialport": "^13.0.0",

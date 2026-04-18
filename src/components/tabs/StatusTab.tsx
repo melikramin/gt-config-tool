@@ -277,7 +277,7 @@ export const StatusTab: FC = () => {
     addDebugLine(`RX ← ${response}`);
     const gsm = parseGsm(response);
     setState((prev) => ({ ...prev, gsm }));
-    if (gsm.imei && gsm.imei !== '0' && gsm.imei !== '') {
+    if (gsm.imei && /[1-9]/.test(gsm.imei)) {
       setImeiLoaded(true);
       setDeviceImei(gsm.imei);
     }

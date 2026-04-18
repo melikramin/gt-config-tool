@@ -230,29 +230,71 @@ export const InputsOutputsTab: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 
+  // The device only accepts encoder assignments when both target inputs are
+  // in Pulse mode (3). Writing ENCODERn with non-pulse pins silently resets
+  // the pin back to mode 3 on the device side, overriding the user's choice.
+  const encoderGuardFailure = useCallback(
+    (enc: EncoderParams): { pinA: number; pinB: number } | null => {
+      const a = Number(enc.pinA);
+      const b = Number(enc.pinB);
+      const pinOk = (n: number): boolean =>
+        Number.isInteger(n) && n >= 1 && n <= activeCount && inputs[n - 1]?.mode === '3';
+      if (pinOk(a) && pinOk(b)) return null;
+      return { pinA: a, pinB: b };
+    },
+    [inputs, activeCount],
+  );
+
   const saveSettings = useCallback(async () => {
     if (!isConnected) return;
     setSaving(true);
     setStatusMsg(t('io.saving'));
+    const skipped: string[] = [];
     try {
       for (let i = 1; i <= activeCount; i++) {
         const resp = await window.serial.sendCommand(buildInputWriteCmd(password, i, inputs[i - 1]));
         if (isPasswordError(resp)) { await handlePasswordError(); return; }
         if (isErrorResponse(resp)) throw new Error(`IN${i}: ${resp.trim()}`);
       }
-      const respE1 = await window.serial.sendCommand(buildEncoderWriteCmd(password, 1, enc1));
-      if (isPasswordError(respE1)) { await handlePasswordError(); return; }
-      if (isErrorResponse(respE1)) throw new Error(`ENCODER1: ${respE1.trim()}`);
-      const respE2 = await window.serial.sendCommand(buildEncoderWriteCmd(password, 2, enc2));
-      if (isPasswordError(respE2)) { await handlePasswordError(); return; }
-      if (isErrorResponse(respE2)) throw new Error(`ENCODER2: ${respE2.trim()}`);
-      setStatusMsg(t('io.saveSuccess'));
+
+      const e1Fail = encoderGuardFailure(enc1);
+      if (e1Fail) {
+        skipped.push(
+          t('io.encoderSkipped')
+            .replace('{n}', '1')
+            .replace('{pins}', `IN${e1Fail.pinA}, IN${e1Fail.pinB}`),
+        );
+      } else {
+        const respE1 = await window.serial.sendCommand(buildEncoderWriteCmd(password, 1, enc1));
+        if (isPasswordError(respE1)) { await handlePasswordError(); return; }
+        if (isErrorResponse(respE1)) throw new Error(`ENCODER1: ${respE1.trim()}`);
+      }
+
+      const e2Fail = encoderGuardFailure(enc2);
+      if (e2Fail) {
+        skipped.push(
+          t('io.encoderSkipped')
+            .replace('{n}', '2')
+            .replace('{pins}', `IN${e2Fail.pinA}, IN${e2Fail.pinB}`),
+        );
+      } else {
+        const respE2 = await window.serial.sendCommand(buildEncoderWriteCmd(password, 2, enc2));
+        if (isPasswordError(respE2)) { await handlePasswordError(); return; }
+        if (isErrorResponse(respE2)) throw new Error(`ENCODER2: ${respE2.trim()}`);
+      }
+
+      if (skipped.length > 0) {
+        setStatusMsg(skipped.join(' '));
+      } else {
+        setStatusMsg(t('io.saveSuccess'));
+        setLastError('');
+      }
     } catch (err) {
       setStatusMsg(`${t('io.saveError')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
-  }, [isConnected, password, inputs, activeCount, enc1, enc2, handlePasswordError, t]);
+  }, [isConnected, password, inputs, activeCount, enc1, enc2, handlePasswordError, t, encoderGuardFailure, setLastError]);
 
   const updateInput = useCallback(<K extends keyof InputParams>(row: number, key: K, value: InputParams[K]) => {
     setInputs((prev) => {
