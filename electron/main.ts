@@ -46,7 +46,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
     },
-    title: 'GT-9 Configurator v2.0',
+    title: `GT-9 Configurator v${app.getVersion()}`,
   });
 
   mainWindow.on('ready-to-show', () => {
