@@ -16,7 +16,8 @@ export type TabId =
   | 'keyboard'
   | 'security'
   | 'printer'
-  | 'tags';
+  | 'tags'
+  | 'system';
 
 interface TabItem {
   id: TabId;
@@ -38,6 +39,7 @@ const TABS: TabItem[] = [
   { id: 'security', labelKey: 'tab.security' },
   { id: 'printer', labelKey: 'tab.printer' },
   { id: 'tags', labelKey: 'tab.tags' },
+  { id: 'system', labelKey: 'tab.system' },
 ];
 
 interface SidebarProps {

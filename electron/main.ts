@@ -2,6 +2,9 @@ import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { SerialManager } from './serial/SerialManager';
+import { waitForBootDrive, copyFirmwareWithRetry } from './firmware';
+import { listDfuDevices, waitForDfuDevice, launchDfuSeDemo } from './dfu-stm';
+import { initAutoUpdater } from './updater';
 
 // Catch native exceptions (e.g. serial port yanked out) so the app doesn't crash
 process.on('uncaughtException', (err) => {
@@ -37,6 +40,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    icon: path.join(__dirname, '..', 'build', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -46,8 +50,11 @@ function createWindow(): void {
   });
 
   mainWindow.on('ready-to-show', () => {
+    mainWindow?.maximize();
     mainWindow?.show();
   });
+
+  initAutoUpdater(mainWindow);
 
   if (isDev) {
     loadDevUrl(mainWindow);
@@ -126,6 +133,55 @@ ipcMain.handle('dialog:openFile', async (_event, filters?: { name: string; exten
   });
   if (canceled || filePaths.length === 0) return null;
   return readFileSync(filePaths[0], 'utf8');
+});
+
+// --- Firmware update (F4 / mass storage flow) ---
+
+ipcMain.handle('firmware:pickFile', async () => {
+  if (!mainWindow) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    filters: [{ name: 'DFU Firmware', extensions: ['dfu'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return { path: filePaths[0], name: path.basename(filePaths[0]) };
+});
+
+ipcMain.handle('firmware:waitForBootDrive', async (_event, timeoutMs: number) => {
+  const drive = await waitForBootDrive(timeoutMs);
+  return { mountPath: drive.mountPath, label: drive.label };
+});
+
+ipcMain.handle('firmware:copyToBoot', async (_event, srcPath: string, destDir: string) => {
+  const dest = await copyFirmwareWithRetry(srcPath, destDir, 5, 1000);
+  return dest;
+});
+
+// --- Firmware update (DFU flow, non-F4 devices) ---
+
+ipcMain.handle('dfu:listDevices', () => {
+  return listDfuDevices();
+});
+
+ipcMain.handle('dfu:waitForDevice', async (_event, timeoutMs: number) => {
+  return waitForDfuDevice(timeoutMs);
+});
+
+ipcMain.handle('dfu:launchDemo', () => {
+  launchDfuSeDemo();
+});
+
+// Race F4 mass-storage detection against DFU device detection.
+// Returns whichever path becomes available first, so the renderer doesn't need to know
+// the device type in advance.
+ipcMain.handle('firmware:waitForMode', async (_event, timeoutMs: number) => {
+  const bootPromise = waitForBootDrive(timeoutMs)
+    .then((drive) => ({ mode: 'boot' as const, mountPath: drive.mountPath, label: drive.label }));
+  const dfuPromise = waitForDfuDevice(timeoutMs)
+    .then((dev) => ({ mode: 'dfu' as const, name: dev.name, status: dev.status }));
+  return Promise.any([bootPromise, dfuPromise]).catch(() => {
+    throw new Error('Neither BOOT drive nor DFU device appeared within timeout');
+  });
 });
 
 // --- App lifecycle ---

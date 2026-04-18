@@ -8,6 +8,7 @@ import type { PortInfo } from '../../types/serial';
 import { readAllSettings } from '../../lib/readAllSettings';
 import { writeAllSettings } from '../../lib/writeAllSettings';
 import { buildTemplateCommands, loadTemplateFromText } from '../../lib/templates';
+import { UpdateNotification } from './UpdateNotification';
 
 const PORT_POLL_INTERVAL = 1500;
 
@@ -313,6 +314,9 @@ export const Toolbar: FC = () => {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Updater: icon appears only when an update is available */}
+      <UpdateNotification />
 
       {/* Language switcher */}
       <select

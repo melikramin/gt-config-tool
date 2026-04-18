@@ -22,6 +22,15 @@ interface QueuedCommand {
 const DEFAULT_TIMEOUT = 8000;
 const BAUD_RATE = 115200;
 
+// Commands that can take significantly longer than a normal request.
+// The device keeps the line silent while it works (FACTORY ≈ 35–40 s observed).
+const LONG_COMMAND_TIMEOUTS: Record<string, number> = {
+  FACTORY: 90_000,
+  ERASURE: 90_000,
+  MEMR: 90_000,
+  MEMT: 90_000,
+};
+
 export class SerialManager {
   private port: import('serialport').SerialPort | null = null;
   private buffer = '';
@@ -111,7 +120,7 @@ export class SerialManager {
     }
   }
 
-  sendCommand(raw: string, timeout: number = DEFAULT_TIMEOUT): Promise<string> {
+  sendCommand(raw: string, timeout?: number): Promise<string> {
     return new Promise((resolve, reject) => {
       if (!this.port?.isOpen) {
         reject(new Error('Port is not open'));
@@ -122,9 +131,13 @@ export class SerialManager {
       // Raw format: $PASSWORD;COMMAND;...
       const withoutDollar = raw.startsWith('$') ? raw.slice(1) : raw;
       const parts = withoutDollar.split(';');
-      const expectedPrefix = ('$' + (parts[1] ?? parts[0])).toUpperCase();
+      const cmdName = (parts[1] ?? parts[0] ?? '').toUpperCase();
+      const expectedPrefix = '$' + cmdName;
 
-      this.commandQueue.push({ raw, expectedPrefix, timeout, resolve, reject });
+      const effectiveTimeout =
+        timeout ?? LONG_COMMAND_TIMEOUTS[cmdName] ?? DEFAULT_TIMEOUT;
+
+      this.commandQueue.push({ raw, expectedPrefix, timeout: effectiveTimeout, resolve, reject });
       this.processQueue();
     });
   }

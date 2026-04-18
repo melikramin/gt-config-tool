@@ -58,6 +58,7 @@ export interface Translations {
   'tab.security': string;
   'tab.printer': string;
   'tab.tags': string;
+  'tab.system': string;
 
   // Common
   'common.sectionInDevelopment': string;
@@ -247,6 +248,7 @@ export interface Translations {
   'io.readError': string;
   'io.saveError': string;
   'io.notConnected': string;
+  'io.encoderSkipped': string;
 
   // RS Interfaces tab
   'rs.colPort': string;
@@ -500,4 +502,88 @@ export interface Translations {
   'tags.importError': string;
   'tags.importSuccess': string;
   'tags.importLimitExceeded': string;
+
+  // System tab
+  'sys.panelActions': string;
+  'sys.factoryTitle': string;
+  'sys.factoryDesc': string;
+  'sys.factoryBtn': string;
+  'sys.defaultTitle': string;
+  'sys.defaultDesc': string;
+  'sys.defaultBtn': string;
+  'sys.erasureTitle': string;
+  'sys.erasureDesc': string;
+  'sys.erasureBtn': string;
+  'sys.tagsDelTitle': string;
+  'sys.tagsDelDesc': string;
+  'sys.tagsDelBtn': string;
+  'sys.msensCalTitle': string;
+  'sys.msensCalDesc': string;
+  'sys.msensCalBtn': string;
+  'sys.sdTitle': string;
+  'sys.sdDesc': string;
+  'sys.sdOnTitle': string;
+  'sys.sdOnBtn': string;
+  'sys.sdOffTitle': string;
+  'sys.sdOffBtn': string;
+  'sys.panelFirmware': string;
+  'sys.firmwareFile': string;
+  'sys.firmwareChoose': string;
+  'sys.firmwareUpload': string;
+  'sys.firmwareNoFile': string;
+  'sys.fwHint': string;
+  'sys.fwStepCommand': string;
+  'sys.fwStepWaitDrive': string;
+  'sys.fwStepCopy': string;
+  'sys.fwStepDone': string;
+  'sys.fwStepWaitMode': string;
+  'sys.fwStepErase': string;
+  'sys.fwStepWrite': string;
+  'sys.fwStepManifest': string;
+  'sys.fwStepLaunchDemo': string;
+  'sys.fwDemoLaunchedTitle': string;
+  'sys.fwDemoLaunchedHint': string;
+  'sys.fwErrorUpdateCmd': string;
+  'sys.fwErrorDriveTimeout': string;
+  'sys.fwErrorCopy': string;
+  'sys.fwErrorDfuAccess': string;
+  'sys.fwErrorDfuGeneric': string;
+  'sys.fwConfirmTitle': string;
+  'sys.fwConfirmDesc': string;
+  'sys.fwDoneTitle': string;
+  'sys.fwDoneHint': string;
+  'sys.fwDoneDismiss': string;
+  'sys.fwRecoveryTitle': string;
+  'sys.fwRecoveryHint': string;
+  'sys.fwRecoveryButton': string;
+  'sys.fwRecoveryConfirmDesc': string;
+  'sys.confirmTitle': string;
+  'sys.confirmIrreversible': string;
+  'sys.confirmProceed': string;
+  'sys.confirmCancel': string;
+  'sys.running': string;
+  'sys.success': string;
+  'sys.error': string;
+  'sys.notConnected': string;
+  'sys.blockingTitle': string;
+  'sys.blockingDesc': string;
+  'sys.blockingWait': string;
+
+  // Updater
+  'updater.badge': string;
+  'updater.title': string;
+  'updater.newVersion': string;
+  'updater.currentVersion': string;
+  'updater.releaseNotes': string;
+  'updater.download': string;
+  'updater.later': string;
+  'updater.downloading': string;
+  'updater.readyTitle': string;
+  'updater.readyDesc': string;
+  'updater.restartNow': string;
+  'updater.restartLater': string;
+  'updater.restartBlocked': string;
+  'updater.errorTitle': string;
+  'updater.openReleasePage': string;
+  'updater.portableNotice': string;
 }

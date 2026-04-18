@@ -1114,10 +1114,12 @@ export function buildUimWriteCmd(password: string, p: UimParams): string {
 
 /**
  * Parse `$UIM;ENABLE;KEYPAD;...;ENGINE` response.
- * Text fields (GREETING, GOODBYE, TAG_SEARCH) are trimmed of padding spaces.
+ * GREETING / GOODBYE / TAG_SEARCH keep their padding spaces — operators use
+ * leading/trailing spaces to center the text on the device display.
  */
 export function parseUimResponse(raw: string): UimParams | null {
-  const t = raw.trim().replace(/^\$/, '');
+  // Strip only the trailing CR/LF, not inner whitespace that belongs to text fields.
+  const t = raw.replace(/^\$/, '').replace(/\r?\n$/, '');
   const parts = t.split(';');
   if (parts[0] !== 'UIM' || parts.length < 17) return null;
   return {
@@ -1130,9 +1132,9 @@ export function parseUimResponse(raw: string): UimParams | null {
     reqPin:     parts[7] === '1',
     keySound:   parts[8] === '1',
     termSound:  parts[9] === '1',
-    greeting:   (parts[10] ?? '').trim(),
-    goodbye:    (parts[11] ?? '').trim(),
-    tagSearch:  (parts[12] ?? '').trim(),
+    greeting:   parts[10] ?? '',
+    goodbye:    parts[11] ?? '',
+    tagSearch:  parts[12] ?? '',
     checkVid:   parts[13] === '1',
     projectId:  parts[14] === '1',
     compareOdo: parts[15] === '1',

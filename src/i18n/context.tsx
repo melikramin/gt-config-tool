@@ -11,7 +11,10 @@ function getInitialLocale(): Locale {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'en' || stored === 'ru') return stored;
   } catch { /* ignore */ }
-  return 'en';
+  // First launch: follow the OS locale. Electron's navigator.language reflects
+  // the Windows display language (e.g. 'ru-RU' on Russian Windows).
+  const sys = (typeof navigator !== 'undefined' ? navigator.language : 'en').toLowerCase();
+  return sys.startsWith('ru') ? 'ru' : 'en';
 }
 
 interface I18nContextValue {

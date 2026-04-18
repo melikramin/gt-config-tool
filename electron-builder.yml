@@ -1,14 +1,44 @@
 appId: com.geotek.gt9-configurator
 productName: GT-9 Configurator
+# serialport ships N-API prebuilds (prebuilds/<platform>/*.node) selected at
+# runtime by node-gyp-build, so we don't need MSBuild to rebuild native code.
+npmRebuild: false
 directories:
   buildResources: build
   output: release
 files:
   - dist/**/*
   - dist-electron/**/*
+  - "!node_modules/@serialport/bindings-cpp/build"
+asarUnpack:
+  - "node_modules/@serialport/bindings-cpp/prebuilds/**/*"
+extraResources:
+  - from: resources/dfuse
+    to: dfuse
+    filter:
+      - "**/*"
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
   icon: build/icon.ico
+  artifactName: "GT9-Configurator-${version}-${arch}-Setup.${ext}"
+electronLanguages:
+  - en-US
+  - ru
+portable:
+  artifactName: "GT9-Configurator-${version}-portable.exe"
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  differentialPackage: true
+publish:
+  provider: github
+  owner: melikramin
+  repo: gt-config-tool
+  releaseType: release
+# TODO: add `certificateFile` / `certificatePassword` (or Azure Code Signing)
+# to get rid of SmartScreen "Unknown publisher" warnings.

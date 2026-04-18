@@ -16,8 +16,10 @@ import { KeyboardTab } from './components/tabs/KeyboardTab';
 import { SecurityTab } from './components/tabs/SecurityTab';
 import { PrinterTab } from './components/tabs/PrinterTab';
 import { TagsTab } from './components/tabs/TagsTab';
+import { SystemTab } from './components/tabs/SystemTab';
 import { useConnectionStore } from './stores/connectionStore';
 import { useStatusStore } from './stores/statusStore';
+import { useDiagnosticsStore } from './stores/diagnosticsStore';
 import { useI18n } from './i18n';
 
 const TAB_COMPONENTS: Record<TabId, FC> = {
@@ -35,27 +37,31 @@ const TAB_COMPONENTS: Record<TabId, FC> = {
   security: SecurityTab,
   printer: PrinterTab,
   tags: TagsTab,
+  system: SystemTab,
 };
 
 const App: FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('status');
   const prevTabRef = useRef<TabId>('status');
   const { password, isConnected } = useConnectionStore();
-  const { showPasswordError, setShowPasswordError } = useStatusStore();
+  const { showPasswordError, setShowPasswordError, isSystemBusy } = useStatusStore();
   const { t } = useI18n();
 
-  // Switch to Status tab on disconnect
+  // Switch to Status tab on disconnect — unless a system-level op is in progress
+  // (e.g. firmware update disconnects mid-way intentionally).
   useEffect(() => {
-    if (!isConnected) {
+    if (!isConnected && !isSystemBusy) {
       setActiveTab('status');
+      useDiagnosticsStore.getState().clearEnabledChannels();
     }
-  }, [isConnected]);
+  }, [isConnected, isSystemBusy]);
 
   const handleTabChange = useCallback((tab: TabId) => {
     // When leaving diagnostics tab, disable all logs to avoid interference
     // When leaving diagnostics, reset logs — but skip if going to status (its init already sends LOG;RESET)
     if (prevTabRef.current === 'diagnostics' && tab !== 'diagnostics' && tab !== 'status' && isConnected) {
       window.serial.sendCommand(`$${password};LOG;RESET`).catch(() => {});
+      useDiagnosticsStore.getState().clearEnabledChannels();
     }
     prevTabRef.current = tab;
     setActiveTab(tab);
