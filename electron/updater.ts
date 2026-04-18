@@ -85,14 +85,11 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
 
   // Track whether user has initiated a download — only then do we surface errors.
   let userInitiated = false;
-  // True while the user is downloading *in this session*. Distinguishes a fresh
-  // download from a pending one left over from a previous session.
-  let downloadingThisSession = false;
 
   if (!portable) {
     autoUpdater.autoDownload = false;
-    // We handle the install timing ourselves (see update-downloaded handler).
-    autoUpdater.autoInstallOnAppQuit = false;
+    // Install pending update when the app quits (if user chose "On next launch").
+    autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.logger = null;
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
@@ -107,21 +104,8 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
 
     autoUpdater.on('update-not-available', () => send('update:not-available'));
     autoUpdater.on('download-progress', (p: ProgressInfo) => send('update:download-progress', p));
-
-    autoUpdater.on('update-downloaded', () => {
-      if (!downloadingThisSession) {
-        // Pending install from a previous session (user clicked "On next launch").
-        // Apply it silently now, before the user sees the old version.
-        console.info('[updater] applying pending update on startup');
-        setImmediate(() => autoUpdater.quitAndInstall(true, true));
-        return;
-      }
-      send('update:downloaded');
-    });
-
+    autoUpdater.on('update-downloaded', () => send('update:downloaded'));
     autoUpdater.on('error', (err: Error) => {
-      // Suppress background errors (no internet, 404, etc.). Only surface
-      // errors once the user has clicked Download / Install.
       if (userInitiated) {
         send('update:error', err.message);
       } else {
@@ -173,7 +157,6 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   ipcMain.handle('update:download', async () => {
     if (portable) return false;
     userInitiated = true;
-    downloadingThisSession = true;
     try {
       await autoUpdater.downloadUpdate();
       return true;
@@ -194,15 +177,15 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('update:is-portable', () => portable);
 
-  // Auto-check on startup. If a pending update is found, the update-downloaded
-  // handler applies it immediately — so we run the check without delay to keep
-  // the "old-version flash" as short as possible.
+  // Auto-check shortly after startup.
   if (!app.isPackaged) return;
-  if (portable) {
-    setTimeout(() => checkPortable(false), 3000);
-  } else {
-    autoUpdater.checkForUpdates().catch((err: Error) => {
-      console.warn('[updater] startup check failed:', err.message);
-    });
-  }
+  setTimeout(() => {
+    if (portable) {
+      checkPortable(false);
+    } else {
+      autoUpdater.checkForUpdates().catch((err: Error) => {
+        console.warn('[updater] startup check failed:', err.message);
+      });
+    }
+  }, 5000);
 }
