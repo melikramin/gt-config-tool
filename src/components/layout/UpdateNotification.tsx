@@ -9,6 +9,7 @@ type UpdaterState =
   | { kind: 'available'; info: UpdateAvailablePayload }
   | { kind: 'downloading'; info: UpdateAvailablePayload; progress: number }
   | { kind: 'ready'; info: UpdateAvailablePayload }
+  | { kind: 'installing'; info: UpdateAvailablePayload }
   | { kind: 'error'; message: string; info: UpdateAvailablePayload };
 
 export const UpdateNotification: FC = () => {
@@ -71,7 +72,13 @@ export const UpdateNotification: FC = () => {
 
   const handleRestart = async (): Promise<void> => {
     if (restartBlocked) return;
-    await window.updater.installAndRestart();
+    if (state.kind !== 'ready') return;
+    // Show an "installing" overlay immediately so the user sees feedback —
+    // electron-updater's quitAndInstall can take 3-5s to actually close the app.
+    setState({ kind: 'installing', info: state.info });
+    setModalOpen(true);
+    // Defer the install one frame so the overlay paints first.
+    setTimeout(() => { window.updater.installAndRestart(); }, 50);
   };
 
   // Nothing visible when there's no update.
@@ -97,7 +104,22 @@ export const UpdateNotification: FC = () => {
         )}
       </button>
 
-      {modalOpen && (
+      {modalOpen && state.kind === 'installing' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <svg className="w-12 h-12 animate-spin text-green-500" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+              <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+            <div className="text-center">
+              <div className="text-zinc-100 text-lg font-semibold">{t('updater.installingTitle')}</div>
+              <div className="text-zinc-400 text-sm mt-1">{t('updater.installingDesc')}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalOpen && state.kind !== 'installing' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl p-5 max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
             {state.kind === 'error' ? (

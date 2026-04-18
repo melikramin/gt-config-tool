@@ -585,4 +585,6 @@ export const ru: Translations = {
   'updater.errorTitle': 'Ошибка обновления',
   'updater.openReleasePage': 'Открыть страницу релиза',
   'updater.portableNotice': 'Портативная сборка — скачайте новую версию вручную и замените файл .exe.',
+  'updater.installingTitle': 'Установка обновления...',
+  'updater.installingDesc': 'Программа автоматически закроется и перезапустится.',
 };
