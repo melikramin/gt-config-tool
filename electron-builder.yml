@@ -31,9 +31,8 @@ electronLanguages:
 portable:
   artifactName: "GT9-Configurator-${version}-portable.exe"
 nsis:
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
   differentialPackage: true
 publish:
   provider: github
