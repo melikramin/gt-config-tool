@@ -88,7 +88,10 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
 
   if (!portable) {
     autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
+    // Once the user clicks Download, electron-updater has their consent to
+    // install. Turning this on means "On next launch" just works — the update
+    // gets applied when the app quits next time.
+    autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.logger = null;
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
