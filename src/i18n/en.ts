@@ -585,4 +585,6 @@ export const en: Translations = {
   'updater.errorTitle': 'Update error',
   'updater.openReleasePage': 'Open release page',
   'updater.portableNotice': 'Portable build — download the new version manually and replace the .exe file.',
+  'updater.installingTitle': 'Installing update...',
+  'updater.installingDesc': 'The application will close and restart automatically.',
 };

@@ -586,4 +586,6 @@ export interface Translations {
   'updater.errorTitle': string;
   'updater.openReleasePage': string;
   'updater.portableNotice': string;
+  'updater.installingTitle': string;
+  'updater.installingDesc': string;
 }
