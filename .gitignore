@@ -7,5 +7,5 @@ release/
 *.dmg
 *.AppImage
 .env
-docs/git.md
+docs/
 .claude/
