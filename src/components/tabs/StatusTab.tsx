@@ -1,4 +1,4 @@
-import { type FC, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { type FC, useState, useCallback, useEffect, useMemo } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -141,24 +141,12 @@ export const StatusTab: FC = () => {
     }
     setConnected(false);
   }, [setLastError, setShowPasswordError, setConnected, t]);
-  const [showDebug, setShowDebug] = useState(false);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-  const debugRef = useRef<HTMLPreElement>(null);
-
   const addDebugLine = useCallback((line: string) => {
+    // Debug panel is hidden in Status tab; keep the call-sites intact and
+    // just forward lines to the console for DevTools inspection.
     const ts = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions);
-    setDebugLog((prev) => {
-      const next = [...prev, `[${ts}] ${line}`];
-      return next.length > 300 ? next.slice(-300) : next;
-    });
+    console.debug(`[${ts}] ${line}`);
   }, []);
-
-  // Auto-scroll debug log
-  useEffect(() => {
-    if (debugRef.current) {
-      debugRef.current.scrollTop = debugRef.current.scrollHeight;
-    }
-  }, [debugLog]);
 
   // Subscribe to raw serial data so we can see exactly what the device sends
   useEffect(() => {
@@ -611,34 +599,6 @@ export const StatusTab: FC = () => {
 
       </div>
 
-      {/* Debug panel */}
-      <div className="mt-3">
-        <button
-          onClick={() => setShowDebug((v) => !v)}
-          className="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-2 py-0.5 mb-1"
-        >
-          {showDebug ? 'Hide' : 'Show'} Debug Log
-        </button>
-        {showDebug && (
-          <div className="bg-zinc-900 border border-zinc-700 rounded p-2">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-xs text-zinc-500">Command / Response exchange ({debugLog.length} lines)</span>
-              <button
-                onClick={() => setDebugLog([])}
-                className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-1.5"
-              >
-                Clear
-              </button>
-            </div>
-            <pre
-              ref={debugRef}
-              className="h-64 overflow-auto text-[11px] font-mono bg-black/40 rounded p-2 text-zinc-300 whitespace-pre-wrap"
-            >
-              {debugLog.join('\n') || 'Waiting for data...'}
-            </pre>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
