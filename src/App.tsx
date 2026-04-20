@@ -15,6 +15,7 @@ import { PumpsTab } from './components/tabs/PumpsTab';
 import { KeyboardTab } from './components/tabs/KeyboardTab';
 import { SecurityTab } from './components/tabs/SecurityTab';
 import { PrinterTab } from './components/tabs/PrinterTab';
+import { CameraTab } from './components/tabs/CameraTab';
 import { TagsTab } from './components/tabs/TagsTab';
 import { SystemTab } from './components/tabs/SystemTab';
 import { useConnectionStore } from './stores/connectionStore';
@@ -36,6 +37,7 @@ const TAB_COMPONENTS: Record<TabId, FC> = {
   keyboard: KeyboardTab,
   security: SecurityTab,
   printer: PrinterTab,
+  camera: CameraTab,
   tags: TagsTab,
   system: SystemTab,
 };

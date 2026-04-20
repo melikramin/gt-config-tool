@@ -33,6 +33,7 @@ import {
   buildPrntnReadCmd,
   buildPrntpReadCmd,
   buildPrntwReadCmd,
+  buildCameraReadCmd,
   parseFilterResponse,
   parseMsensResponse,
   parseTiltResponse,
@@ -52,6 +53,7 @@ import {
   parsePrntnResponse,
   parsePrntpResponse,
   parsePrntwResponse,
+  parseCameraResponse,
   parsePrsetResponse,
   parseInCount,
   EMPTY_INPUT,
@@ -67,6 +69,8 @@ import {
   EMPTY_BYPASS,
   EMPTY_PUMPSEC,
   EMPTY_PRINTER,
+  EMPTY_CAMERA,
+  CAMERA_SLOT_COUNT,
   PUMP_COUNT,
   FLS_MAX_SENSORS,
   WIFI_MAX_NETWORKS,
@@ -77,6 +81,7 @@ import {
   type LlsSettings,
   type PumpParams,
   type PumpFormatParams,
+  type CameraParams,
 } from './commands';
 import {
   parseApn,
@@ -121,9 +126,9 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
   settings.setIsReadingAll(true);
 
   // Total steps for progress
-  // Server:2, Protocol:2, WiFi:1+up to 5, GPS:3, IO:1+6+2, RS:6, FLS:6, Pumps:4, PumpFmt:4, Keyboard:2, Security:4, Printer:4
-  // Approximate: 52 steps
-  const TOTAL_STEPS = 52;
+  // Server:2, Protocol:2, WiFi:1+up to 5, GPS:3, IO:1+6+2, RS:6, FLS:6,
+  // Pumps:4, PumpFmt:4, Keyboard:2, Security:4, Printer:4, Camera:CAMERA_SLOT_COUNT
+  const TOTAL_STEPS = 52 + CAMERA_SLOT_COUNT;
   let step = 0;
 
   const progress = (text: string) => {
@@ -369,6 +374,21 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
     const website = isErrorResponse(prntwResp) ? '' : (parsePrntwResponse(prntwResp) ?? '');
 
     settings.setPrinterSettings(printerSettings, { stationName, phone, website });
+
+    // ---- Cameras ----
+    const cameras: Array<CameraParams | null> = Array.from({ length: CAMERA_SLOT_COUNT }, () => null);
+    for (let i = 0; i < CAMERA_SLOT_COUNT; i++) {
+      progress(`CAMERA${i}`);
+      const resp = await window.serial.sendCommand(buildCameraReadCmd(password, i));
+      if (isPasswordError(resp)) { await callbacks.onPasswordError(); return false; }
+      if (isErrorResponse(resp)) {
+        cameras[i] = { ...EMPTY_CAMERA };
+        continue;
+      }
+      const parsed = parseCameraResponse(resp);
+      cameras[i] = parsed ? parsed.params : { ...EMPTY_CAMERA };
+    }
+    settings.setCameras(cameras);
 
     return true;
   } catch (err) {

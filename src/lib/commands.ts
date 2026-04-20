@@ -1578,6 +1578,152 @@ export function buildPrinterMakeCmd(password: string): string {
   return buildCmd(password, 'PRINTER', ['MAKE']);
 }
 
+// ---- Camera tab commands (CAMERA0..2) ----
+
+/** CONFIG can scan all baud rates — give it ample time. */
+export const CAMERA_CONFIG_TIMEOUT_MS = 60_000;
+
+/** GETPIC captures + uploads an image — can take a while. */
+export const CAMERA_GETPIC_TIMEOUT_MS = 60_000;
+
+/** Number of camera slots exposed in the UI (0..2). */
+export const CAMERA_SLOT_COUNT = 3;
+
+/**
+ * Camera per-slot parameters — only the fields we expose in the UI.
+ *
+ * Wire frame (after `$CAMERA<n>;`) has 13 positional fields:
+ *   ENABLE;ADDRESS;BAUDRATE;PIC_SIZE;
+ *   TIMER_ON,TIMER_INTERVAL;IGN_ON,IGN_TIMER;SOS_ON;
+ *   IN_ON,INPUTS,INPUTS_POLARITY;GEO_ON,GEOFENCE,GEOFENCE_POLARITY;
+ *   ECO_ON;SHOKE_ON;TILT_ON;EKEY_ON
+ *
+ * Unused triggers (IGN, SOS, GEO, ECO) are always written as zeros — the
+ * UI never exposes them and any device-stored values are overwritten on
+ * save. The position-5/6 ordering above (periodic timer first, ignition
+ * second) reflects the live GT-9 device, not the legacy WinForms task doc
+ * which has them swapped.
+ */
+export interface CameraParams {
+  enable: boolean;
+  address: string;          // 0=RS232, 1..16=RS485 address
+  baudrate: string;         // 0..6 (see CAMERA_BAUDRATE_OPTIONS)
+  picSize: string;          // 1..3 (see CAMERA_PIC_SIZE_OPTIONS)
+  timerOn: boolean;
+  timerInterval: string;    // minutes
+  inOn: boolean;
+  inputs: string;           // 4-hex bitmask
+  inputsPolarity: string;   // 4-hex bitmask
+  shokeOn: boolean;
+  tiltOn: boolean;
+  ekeyOn: boolean;
+}
+
+export const EMPTY_CAMERA: CameraParams = {
+  enable: false,
+  address: '0',
+  baudrate: '0',
+  picSize: '1',
+  timerOn: false,
+  timerInterval: '0',
+  inOn: false,
+  inputs: '0000',
+  inputsPolarity: 'FFFF',
+  shokeOn: false,
+  tiltOn: false,
+  ekeyOn: false,
+};
+
+export const CAMERA_BAUDRATE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '0', label: '9600' },
+  { value: '1', label: '19200' },
+  { value: '2', label: '38400' },
+  { value: '3', label: '57600' },
+  { value: '4', label: '115200' },
+  { value: '5', label: '2400' },
+  { value: '6', label: '14400' },
+];
+
+export const CAMERA_PIC_SIZE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '1', label: '160 x 128' },
+  { value: '2', label: '320 x 240' },
+  { value: '3', label: '640 x 480' },
+];
+
+/** Read camera config: `$PASS;CAMERA<slot>;GET`. */
+export function buildCameraReadCmd(password: string, slot: number): string {
+  return buildCmd(password, `CAMERA${slot}`, ['GET']);
+}
+
+/** Write camera config: `$PASS;CAMERA<slot>;SET;...13 fields`. Hidden triggers always 0. */
+export function buildCameraWriteCmd(password: string, slot: number, c: CameraParams): string {
+  const b = (v: boolean) => (v ? '1' : '0');
+  return buildCmd(password, `CAMERA${slot}`, [
+    'SET',
+    b(c.enable),
+    c.address,
+    c.baudrate,
+    c.picSize,
+    `${b(c.timerOn)},${c.timerInterval}`,
+    '0,0',                                    // IGN_ON, IGN_TIMER (always disabled)
+    '0',                                      // SOS_ON
+    `${b(c.inOn)},${c.inputs},${c.inputsPolarity}`,
+    '0,0000,FFFF',                            // GEO_ON, GEOFENCE, GEOFENCE_POLARITY
+    '0',                                      // ECO_ON
+    b(c.shokeOn),
+    b(c.tiltOn),
+    b(c.ekeyOn),
+  ]);
+}
+
+/** Auto-configure camera (scans baud rates): `$PASS;CAMERA<slot>;CONFIG`. */
+export function buildCameraConfigCmd(password: string, slot: number): string {
+  return buildCmd(password, `CAMERA${slot}`, ['CONFIG']);
+}
+
+/** Capture + upload one image now: `$PASS;GETPIC<slot>`. */
+export function buildCameraGetPicCmd(password: string, slot: number): string {
+  return buildCmd(password, `GETPIC${slot}`);
+}
+
+/** Parse `$CAMERA<n>;...13 fields`. Returns slot + params, or null on mismatch. */
+export function parseCameraResponse(raw: string): { slot: number; params: CameraParams } | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  const m = parts[0]?.match(/^CAMERA(\d+)$/);
+  if (!m || parts.length < 14) return null;
+
+  const sub2 = (s: string | undefined): [string, string] => {
+    const [a = '0', b = '0'] = (s ?? '').split(',');
+    return [a, b];
+  };
+  const sub3 = (s: string | undefined): [string, string, string] => {
+    const [a = '0', b = '0', c = '0'] = (s ?? '').split(',');
+    return [a, b, c];
+  };
+
+  const [timerOn, timerInterval] = sub2(parts[5]);
+  const [inOn, inputs, inputsPolarity] = sub3(parts[8]);
+
+  return {
+    slot: Number(m[1]),
+    params: {
+      enable: parts[1] === '1',
+      address: parts[2] ?? '0',
+      baudrate: parts[3] ?? '0',
+      picSize: parts[4] ?? '1',
+      timerOn: timerOn === '1',
+      timerInterval,
+      inOn: inOn === '1',
+      inputs,
+      inputsPolarity,
+      shokeOn: parts[11] === '1',
+      tiltOn: parts[12] === '1',
+      ekeyOn: parts[13] === '1',
+    },
+  };
+}
+
 // ---- Tags/Keys tab commands (TAG / TAGS) ----
 
 /** Empty tag ID — indicates an unused slot. */

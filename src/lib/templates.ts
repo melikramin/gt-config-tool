@@ -36,7 +36,7 @@ import {
   buildPrntnWriteCmd,
   buildPrntpWriteCmd,
   buildPrntwWriteCmd,
-  buildLogResetCmd,
+  buildCameraWriteCmd,
   bytesToHex,
   RS_PORTS,
   parsePrsetResponse,
@@ -59,6 +59,7 @@ import {
   parsePrntnResponse,
   parsePrntpResponse,
   parsePrntwResponse,
+  parseCameraResponse,
   EMPTY_INPUT,
   EMPTY_ENCODER,
   EMPTY_LLS,
@@ -71,8 +72,10 @@ import {
   EMPTY_BYPASS,
   EMPTY_PUMPSEC,
   EMPTY_PRINTER,
+  EMPTY_CAMERA,
   FLS_MAX_SENSORS,
   PUMP_COUNT,
+  CAMERA_SLOT_COUNT,
   type RsPortName,
   type WifiNetworkParams,
   type InputParams,
@@ -81,6 +84,7 @@ import {
   type LlsSettings,
   type PumpParams,
   type PumpFormatParams,
+  type CameraParams,
 } from './commands';
 import {
   parseApn,
@@ -228,8 +232,13 @@ export function buildTemplateCommands(): string[] | null {
     lines.push(buildPrntwWriteCmd(password, settings.printerText.website));
   }
 
-  // ---- LOG;RESET at the end ----
-  lines.push(buildLogResetCmd(password));
+  // ---- Cameras ----
+  if (settings.cameras) {
+    for (let i = 0; i < CAMERA_SLOT_COUNT; i++) {
+      const cam = settings.cameras[i];
+      if (cam) lines.push(buildCameraWriteCmd(password, i, cam));
+    }
+  }
 
   return lines;
 }
@@ -271,11 +280,12 @@ function lineToResponse(line: string): { cmd: string; response: string } | null 
     'PRINTER',
   ];
 
-  // Pattern-based: WIFINETn, ENCODERn, LLSn
+  // Pattern-based: WIFINETn, ENCODERn, LLSn, CAMERAn
   const isSetPattern =
     /^WIFINET\d+$/.test(cmd) ||
     /^ENCODER\d+$/.test(cmd) ||
-    /^LLS\d+$/.test(cmd);
+    /^LLS\d+$/.test(cmd) ||
+    /^CAMERA\d+$/.test(cmd);
 
   let effectiveParams = params;
   if ((COMMANDS_WITH_SET.includes(cmd) || isSetPattern) && params[0] === 'SET') {
@@ -323,6 +333,7 @@ export function loadTemplateFromText(text: string): number {
   let stationName: string | null = null;
   let phone: string | null = null;
   let website: string | null = null;
+  const cameras: Map<number, CameraParams> = new Map();
 
   let parsed = 0;
 
@@ -493,6 +504,15 @@ export function loadTemplateFromText(text: string): number {
       parsed++;
       continue;
     }
+
+    // ---- Cameras ----
+    const camMatch = cmd.match(/^CAMERA(\d+)$/);
+    if (camMatch) {
+      const idx = parseInt(camMatch[1], 10);
+      const p = parseCameraResponse(response);
+      if (p) { cameras.set(idx, p.params); parsed++; }
+      continue;
+    }
   }
 
   if (parsed === 0) return 0;
@@ -607,6 +627,14 @@ export function loadTemplateFromText(text: string): number {
         website: website ?? existingText.website,
       },
     );
+  }
+
+  if (cameras.size > 0) {
+    const existing = settings.cameras;
+    const arr: Array<CameraParams | null> = Array.from({ length: CAMERA_SLOT_COUNT }, (_, i) => {
+      return cameras.get(i) ?? existing?.[i] ?? { ...EMPTY_CAMERA };
+    });
+    settings.setCameras(arr);
   }
 
   return parsed;
