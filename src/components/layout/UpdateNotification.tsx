@@ -12,6 +12,23 @@ type UpdaterState =
   | { kind: 'installing'; info: UpdateAvailablePayload }
   | { kind: 'error'; message: string; info: UpdateAvailablePayload };
 
+// electron-builder wraps the GitHub release body in <p>/<br/> on publish.
+// Convert that minimal HTML back to plain text so the <pre> renders cleanly.
+function stripReleaseNotesHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export const UpdateNotification: FC = () => {
   const { t } = useI18n();
   const isConnected = useConnectionStore((s) => s.isConnected);
@@ -169,7 +186,7 @@ export const UpdateNotification: FC = () => {
                       {t('updater.releaseNotes')}
                     </div>
                     <pre className="text-xs text-zinc-300 whitespace-pre-wrap font-sans bg-zinc-900 border border-zinc-700 rounded p-2 max-h-48 overflow-y-auto">
-                      {state.info.releaseNotes}
+                      {stripReleaseNotesHtml(state.info.releaseNotes)}
                     </pre>
                   </div>
                 )}
