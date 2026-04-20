@@ -39,5 +39,9 @@ publish:
   owner: melikramin
   repo: gt-config-tool
   releaseType: release
+# Use a curated file as the release body instead of the latest commit message.
+# Edit release-notes.md before each `npm run release`.
+releaseInfo:
+  releaseNotesFile: release-notes.md
 # TODO: add `certificateFile` / `certificatePassword` (or Azure Code Signing)
 # to get rid of SmartScreen "Unknown publisher" warnings.

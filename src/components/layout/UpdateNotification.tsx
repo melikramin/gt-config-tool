@@ -12,19 +12,34 @@ type UpdaterState =
   | { kind: 'installing'; info: UpdateAvailablePayload }
   | { kind: 'error'; message: string; info: UpdateAvailablePayload };
 
-// electron-builder wraps the GitHub release body in <p>/<br/> on publish.
-// Convert that minimal HTML back to plain text so the <pre> renders cleanly.
+// GitHub renders the release body as HTML before exposing it via the API,
+// so headings/lists/<br> arrive as raw tags. Convert the common subset back
+// to plain text with line breaks so the <pre> block renders cleanly.
 function stripReleaseNotesHtml(html: string): string {
   return html
+    // Block-level: ensure separation
+    .replace(/<\/(?:p|div|h[1-6]|ul|ol|pre|blockquote)>/gi, '\n\n')
+    .replace(/<(?:p|div|h[1-6]|ul|ol|pre|blockquote)[^>]*>/gi, '')
+    // Lists: bullet items
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    // Line breaks and horizontal rules
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?p>/gi, '\n')
+    .replace(/<hr\s*\/?>/gi, '\n---\n')
+    // Inline tags: strip but keep content
+    .replace(/<\/?(?:strong|b|em|i|code|span|a)[^>]*>/gi, '')
+    // Anything else
     .replace(/<[^>]+>/g, '')
+    // HTML entities
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    // Collapse runs of blank lines
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
