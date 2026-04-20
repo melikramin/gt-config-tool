@@ -136,9 +136,17 @@ export const TagsTab: FC = () => {
       setTotalSlots(info.limit);
       setUsedSlots(info.added);
 
+      if (info.added === 0) {
+        setTags([]);
+        setLoaded(true);
+        setStatusMsg(t('tags.dbEmpty'));
+        return;
+      }
+
       const count = info.limit;
       setProgressTotal(count);
 
+      let validCount = 0;
       for (let i = 1; i <= count; i++) {
         if (cancelRef.current) break;
         setProgress(i);
@@ -150,6 +158,10 @@ export const TagsTab: FC = () => {
         const tag = parseTagGetResponse(resp);
         if (!tag) continue;
         entries.push(tag);
+        if (tag.tagId !== TAG_EMPTY_ID) {
+          validCount++;
+          if (validCount >= info.added) break;
+        }
       }
 
       setTags(entries);
@@ -442,7 +454,7 @@ export const TagsTab: FC = () => {
       {loaded && (
         <div className="flex-[3] min-h-0 overflow-auto border border-zinc-700 rounded">
           {visibleTags.length === 0 ? (
-            <p className="text-zinc-500 p-4 text-sm">{t('tags.noData')}</p>
+            <p className="text-zinc-500 p-4 text-sm">{t('tags.dbEmpty')}</p>
           ) : (
             <table className="w-full text-xs text-zinc-300">
               <thead className="bg-zinc-800 sticky top-0 z-10">

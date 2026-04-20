@@ -16,6 +16,7 @@ export type TabId =
   | 'keyboard'
   | 'security'
   | 'printer'
+  | 'camera'
   | 'tags'
   | 'system';
 
@@ -38,6 +39,7 @@ const TABS: TabItem[] = [
   { id: 'keyboard', labelKey: 'tab.keyboard' },
   { id: 'security', labelKey: 'tab.security' },
   { id: 'printer', labelKey: 'tab.printer' },
+  { id: 'camera', labelKey: 'tab.camera' },
   { id: 'tags', labelKey: 'tab.tags' },
   { id: 'system', labelKey: 'tab.system' },
 ];

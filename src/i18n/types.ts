@@ -57,6 +57,7 @@ export interface Translations {
   'tab.keyboard': string;
   'tab.security': string;
   'tab.printer': string;
+  'tab.camera': string;
   'tab.tags': string;
   'tab.system': string;
 
@@ -487,6 +488,7 @@ export interface Translations {
   'tags.save': string;
   'tags.cancel': string;
   'tags.empty': string;
+  'tags.dbEmpty': string;
   'tags.unlimited': string;
   'tags.exhausted': string;
   'tags.progress': string;
@@ -568,6 +570,48 @@ export interface Translations {
   'sys.blockingTitle': string;
   'sys.blockingDesc': string;
   'sys.blockingWait': string;
+
+  // Camera tab
+  'camera.notConnected': string;
+  'camera.slot': string;
+  'camera.read': string;
+  'camera.reading': string;
+  'camera.readSuccess': string;
+  'camera.readError': string;
+  'camera.save': string;
+  'camera.saving': string;
+  'camera.saveSuccess': string;
+  'camera.saveError': string;
+  'camera.autoConfig': string;
+  'camera.configRunning': string;
+  'camera.configSuccess': string;
+  'camera.configError': string;
+  'camera.confirmConfigTitle': string;
+  'camera.confirmConfigDesc': string;
+  'camera.panelHardware': string;
+  'camera.panelTriggers': string;
+  'camera.enable': string;
+  'camera.address': string;
+  'camera.addressHint': string;
+  'camera.baudrate': string;
+  'camera.picSize': string;
+  'camera.timerOn': string;
+  'camera.timerInterval': string;
+  'camera.minutes': string;
+  'camera.inOn': string;
+  'camera.inputs': string;
+  'camera.inputsPolarity': string;
+  'camera.test': string;
+  'camera.testHint': string;
+  'camera.testRunning': string;
+  'camera.testOk': string;
+  'camera.testFail': string;
+  'camera.shokeOn': string;
+  'camera.tiltOn': string;
+  'camera.ekeyOn': string;
+  'camera.interface': string;
+  'camera.rs232': string;
+  'camera.rs485': string;
 
   // Updater
   'updater.badge': string;

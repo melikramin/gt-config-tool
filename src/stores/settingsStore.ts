@@ -18,6 +18,7 @@ import type {
   PumpsecParams,
   PrinterParams,
   PrinterTextFields,
+  CameraParams,
 } from '../lib/commands';
 
 interface SettingsState {
@@ -73,6 +74,9 @@ interface SettingsState {
   printerSettings: PrinterParams | null;
   printerText: PrinterTextFields | null;
 
+  // Camera tab — one entry per slot (0..2), null if not yet read
+  cameras: Array<CameraParams | null> | null;
+
   // Actions
   setIsReadingAll: (v: boolean) => void;
   setIsWritingAll: (v: boolean) => void;
@@ -88,10 +92,11 @@ interface SettingsState {
   setKeyboardSettings: (uim: UimParams, uimx: UimxParams) => void;
   setSecuritySettings: (emstop: EmstopParams, tagcfg: TagcfgParams, bypass: BypassParams, pumpsec: PumpsecParams) => void;
   setPrinterSettings: (settings: PrinterParams, text: PrinterTextFields) => void;
+  setCameras: (cameras: Array<CameraParams | null>) => void;
   clearAll: () => void;
 }
 
-const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setPrinterSettings' | 'clearAll'> = {
+const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
   isReadingAll: false,
   isWritingAll: false,
   serverApn: null,
@@ -119,6 +124,7 @@ const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setS
   securityPumpsec: null,
   printerSettings: null,
   printerText: null,
+  cameras: null,
 };
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -138,5 +144,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setSecuritySettings: (securityEmstop, securityTagcfg, securityBypass, securityPumpsec) =>
     set({ securityEmstop, securityTagcfg, securityBypass, securityPumpsec }),
   setPrinterSettings: (printerSettings, printerText) => set({ printerSettings, printerText }),
+  setCameras: (cameras) => set({ cameras }),
   clearAll: () => set(INITIAL),
 }));

@@ -29,6 +29,7 @@ const LONG_COMMAND_TIMEOUTS: Record<string, number> = {
   ERASURE: 90_000,
   MEMR: 90_000,
   MEMT: 90_000,
+  TAGCFG: 15_000, // Observed ~9s reply latency on real devices.
 };
 
 export class SerialManager {

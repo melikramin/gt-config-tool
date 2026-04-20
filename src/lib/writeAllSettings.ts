@@ -32,10 +32,11 @@ import {
   buildPrntnWriteCmd,
   buildPrntpWriteCmd,
   buildPrntwWriteCmd,
-  buildLogResetCmd,
+  buildCameraWriteCmd,
   bytesToHex,
   RS_PORTS,
   RS_WRITE_TIMEOUT_MS,
+  CAMERA_SLOT_COUNT,
   type RsPortName,
   type WifiNetworkParams,
 } from './commands';
@@ -73,8 +74,8 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
 
   // Approximate total steps for progress bar
   // Server:2, Protocol:2, WiFi:up to 5, GPS:3, IO:up to 6+2, RS:6, FLS:6,
-  // Pumps:4, PumpFmt:4, Keyboard:2, Security:4, Printer:4, LogReset:1
-  const TOTAL_STEPS = 51;
+  // Pumps:4, PumpFmt:4, Keyboard:2, Security:4, Printer:4, Camera:CAMERA_SLOT_COUNT
+  const TOTAL_STEPS = 50 + CAMERA_SLOT_COUNT;
   let step = 0;
   let errors: string[] = [];
 
@@ -83,8 +84,17 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
     status.setProgress(Math.round((step / TOTAL_STEPS) * 100), text);
   };
 
+  // A single command timing out shouldn't abort the whole "write all" run —
+  // log it into errors[] and return an empty string so downstream
+  // isErrorResponse / isPasswordError checks fall through harmlessly.
   const send = async (cmd: string, timeout?: number): Promise<string> => {
-    return window.serial.sendCommand(cmd, timeout);
+    try {
+      return await window.serial.sendCommand(cmd, timeout);
+    } catch (err) {
+      const cmdName = cmd.split(';')[1] ?? cmd;
+      errors.push(`${cmdName}: ${err instanceof Error ? err.message : String(err)}`);
+      return '';
+    }
   };
 
   try {
@@ -322,9 +332,19 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
       step += 3;
     }
 
-    // ---- LOG;RESET after writing RS/Server ----
-    progress('LOG;RESET');
-    await send(buildLogResetCmd(password));
+    // ---- Cameras ----
+    if (settings.cameras) {
+      for (let i = 0; i < CAMERA_SLOT_COUNT; i++) {
+        const cam = settings.cameras[i];
+        progress(`CAMERA${i}`);
+        if (!cam) continue;
+        const r = await send(buildCameraWriteCmd(password, i, cam));
+        if (isPasswordError(r)) { await callbacks.onPasswordError(); return false; }
+        if (isErrorResponse(r)) errors.push(`CAMERA${i}: ${r.trim()}`);
+      }
+    } else {
+      step += CAMERA_SLOT_COUNT;
+    }
 
     if (errors.length > 0) {
       status.setLastError(`Write errors: ${errors.join(', ')}`);
