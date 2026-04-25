@@ -26,6 +26,8 @@ export const ru: Translations = {
   'toolbar.writeAllError': 'Ошибка записи настроек',
   'toolbar.writeAllNoData': 'Сначала считайте настройки',
   'toolbar.noPorts': '—',
+  'toolbar.themeToLight': 'Светлая тема',
+  'toolbar.themeToDark': 'Тёмная тема',
 
   // Toolbar errors
   'error.disconnect': 'Ошибка отключения:',

@@ -211,11 +211,11 @@ export const DiagnosticsTab: FC = () => {
         <pre
           ref={logRef}
           onScroll={handleLogScroll}
-          className={`flex-1 p-2 text-xs text-green-400 bg-zinc-950 font-mono overflow-auto select-text ${
+          className={`flex-1 p-2 text-xs text-[var(--terminal-fg)] bg-zinc-950 font-mono overflow-auto select-text ${
             wordWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
           }`}
         >
-          {log || <span className="text-zinc-600 italic">{'...'}</span>}
+          {log || <span className="text-zinc-500 italic">{'...'}</span>}
         </pre>
 
         {/* Channel sidebar */}
@@ -224,7 +224,7 @@ export const DiagnosticsTab: FC = () => {
           {LOG_CHANNELS.map((ch) => (
             <label
               key={ch.id}
-              className="flex items-center gap-1.5 text-xs text-zinc-300 py-0.5 cursor-pointer select-none hover:text-white"
+              className="flex items-center gap-1.5 text-xs text-zinc-300 py-0.5 cursor-pointer select-none hover:text-zinc-100"
             >
               <input
                 type="checkbox"

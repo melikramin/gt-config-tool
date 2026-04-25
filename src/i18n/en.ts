@@ -26,6 +26,8 @@ export const en: Translations = {
   'toolbar.writeAllError': 'Error writing settings',
   'toolbar.writeAllNoData': 'Read settings first before writing',
   'toolbar.noPorts': '—',
+  'toolbar.themeToLight': 'Switch to light theme',
+  'toolbar.themeToDark': 'Switch to dark theme',
 
   // Toolbar errors
   'error.disconnect': 'Disconnect error:',

@@ -26,6 +26,8 @@ export interface Translations {
   'toolbar.writeAllError': string;
   'toolbar.writeAllNoData': string;
   'toolbar.noPorts': string;
+  'toolbar.themeToLight': string;
+  'toolbar.themeToDark': string;
 
   // Toolbar errors
   'error.disconnect': string;

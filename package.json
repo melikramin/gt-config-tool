@@ -1,6 +1,6 @@
 {
   "name": "gt9-configurator",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Desktop application for configuring Geotek GT-series devices via USB COM port",
   "main": "dist-electron/main.js",
   "scripts": {
