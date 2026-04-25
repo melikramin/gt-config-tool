@@ -2,6 +2,7 @@ import { type FC, useState, useEffect, useRef, useCallback } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useThemeStore } from '../../stores/themeStore';
 import { useI18n } from '../../i18n';
 import type { Locale } from '../../i18n/types';
 import type { PortInfo } from '../../types/serial';
@@ -25,6 +26,8 @@ export const Toolbar: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const isReadingAll = useSettingsStore((s) => s.isReadingAll);
   const isWritingAll = useSettingsStore((s) => s.isWritingAll);
+  const theme = useThemeStore((s) => s.theme);
+  const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const { t, locale, setLocale } = useI18n();
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -317,6 +320,27 @@ export const Toolbar: FC = () => {
 
       {/* Updater: icon appears only when an update is available */}
       <UpdateNotification />
+
+      {/* Theme toggle */}
+      <button
+        onClick={toggleTheme}
+        title={theme === 'dark' ? t('toolbar.themeToLight') : t('toolbar.themeToDark')}
+        aria-label={theme === 'dark' ? t('toolbar.themeToLight') : t('toolbar.themeToDark')}
+        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 rounded p-1.5 flex items-center justify-center"
+      >
+        {theme === 'dark' ? (
+          /* Sun — click to go light */
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+        ) : (
+          /* Moon — click to go dark */
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        )}
+      </button>
 
       {/* Language switcher */}
       <select

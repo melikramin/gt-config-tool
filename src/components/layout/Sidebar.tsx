@@ -62,7 +62,7 @@ export const Sidebar: FC<SidebarProps> = ({ activeTab, onTabChange }) => {
             px-3 py-2 text-left text-sm transition-colors
             ${activeTab === tab.id
               ? 'bg-blue-600 text-white'
-              : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+              : 'text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
             }
           `}
         >
