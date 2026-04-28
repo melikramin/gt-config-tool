@@ -1,10 +1,9 @@
-Release 2.1.1 — Light theme & diagnostics polish
-
-What's new:
-• Theme selector in the toolbar: switch between dark and light themes with a single click. Choice is remembered between launches.
-• Language selection is now also remembered between launches (no more re-picking RU/EN every time).
+Release 2.1.2 — Pumps tab fixes
 
 Fixes:
-• Diagnostics terminal: log text is now readable in light theme (darker green on white instead of bright green on white).
-• Sidebar tab hover: hovered tab text no longer disappears in light theme.
-• Diagnostics log channels: hovered channel labels no longer disappear in light theme.
+• Decimal fields (Start L, Stop L, Rounding, Price per L, Imp/L) can now be edited normally — typing "1.12" no longer gets snapped back on every keystroke.
+• Comma input from the numeric keypad is auto-converted to a dot, so values entered on systems with a "," decimal separator are accepted by the device (which only supports ".").
+• Start L / Stop L / Rounding are now displayed as #.## and Price per L as #.### (formatted on blur, free typing while focused).
+
+New:
+• Totalizer is editable in PULSER mode — useful when re-syncing the controller's totalizer with a meter reading. Read-only for other pump types.
