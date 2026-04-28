@@ -34,8 +34,23 @@ const isErrorResponse = (r: string): boolean => {
 };
 const isPasswordError = (r: string) => r.trim().endsWith(';PE');
 
-/** Format a numeric string to exactly N decimal places. */
-const toFixed = (v: string, decimals: number): string => {
+/**
+ * Sanitize free-form decimal input: comma → dot (some locales emit `,` from the
+ * numeric keypad), strip everything except digits and at most one dot. The
+ * device's protocol only accepts `.` as the decimal separator.
+ */
+const sanitizeDecimal = (raw: string): string => {
+  let v = raw.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+  const firstDot = v.indexOf('.');
+  if (firstDot !== -1) {
+    v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+  }
+  return v;
+};
+
+/** Format a numeric string to exactly N decimals; pass through unparseable input. */
+const formatDecimal = (v: string, decimals: number | undefined): string => {
+  if (decimals === undefined) return v;
   const n = parseFloat(v);
   return Number.isFinite(n) ? n.toFixed(decimals) : v;
 };
@@ -130,6 +145,63 @@ const NumInput: FC<{
   />
 );
 
+/**
+ * Decimal text input that the user can edit freely (no reformatting per
+ * keystroke) and that always emits a dot-separated value, regardless of
+ * keyboard locale.
+ *
+ * When `decimals` is set, the value is shown formatted to that precision while
+ * the field is unfocused (and on blur), but the user can type freely once the
+ * field is focused — this is what lets a user delete `1.00` and type `1.12`
+ * without each keystroke snapping the value back.
+ */
+const DecimalInput: FC<{
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  className?: string;
+  placeholder?: string;
+  decimals?: number;
+}> = ({ value, onChange, disabled, className, placeholder, decimals }) => {
+  const [focused, setFocused] = useState(false);
+  const [editValue, setEditValue] = useState(() => formatDecimal(value, decimals));
+
+  // Sync formatted display when the parent value changes externally (e.g.
+  // settings load). Skip while focused so user input isn't clobbered.
+  useEffect(() => {
+    if (!focused) setEditValue(formatDecimal(value, decimals));
+  }, [value, focused, decimals]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={editValue}
+      placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        const formatted = formatDecimal(editValue, decimals);
+        setEditValue(formatted);
+        if (formatted !== value) onChange(formatted);
+      }}
+      onChange={(e) => {
+        const clean = sanitizeDecimal(e.target.value);
+        setEditValue(clean);
+        onChange(clean);
+      }}
+      onPaste={(e) => {
+        e.preventDefault();
+        const clean = sanitizeDecimal(e.clipboardData.getData('text'));
+        setEditValue(clean);
+        onChange(clean);
+      }}
+      disabled={disabled}
+      className={`bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-xs text-zinc-200 disabled:opacity-40 focus:border-blue-500 focus:outline-none ${className ?? ''}`}
+    />
+  );
+};
+
 const Select: FC<{
   value: string;
   options: Array<{ value: string; label: string }>;
@@ -211,13 +283,10 @@ const PumpForm: FC<PumpFormProps> = ({ pumps, activePumpIdx, onChange, disabled 
             />
           </Field>
           <Field label={t('pumps.pulsePerLiter')}>
-            <NumInput
+            <DecimalInput
               value={pump.pulse}
               onChange={(v) => onChange('pulse', v)}
               disabled={fieldsDisabled}
-              min={0}
-              max={2000}
-              step="0.01"
               className="w-full"
             />
           </Field>
@@ -266,32 +335,29 @@ const PumpForm: FC<PumpFormProps> = ({ pumps, activePumpIdx, onChange, disabled 
             />
           </Field>
           <Field label={t('pumps.relay2Start')}>
-            <NumInput
-              value={toFixed(pump.secondStart, 2)}
+            <DecimalInput
+              value={pump.secondStart}
               onChange={(v) => onChange('secondStart', v)}
               disabled={relay2Disabled}
-              min={0}
-              step="0.01"
+              decimals={2}
               className="w-full"
             />
           </Field>
           <Field label={t('pumps.relay2Stop')}>
-            <NumInput
-              value={toFixed(pump.secondStop, 2)}
+            <DecimalInput
+              value={pump.secondStop}
               onChange={(v) => onChange('secondStop', v)}
               disabled={relay2Disabled}
-              min={0}
-              step="0.01"
+              decimals={2}
               className="w-full"
             />
           </Field>
           <Field label={t('pumps.rounding')}>
-            <NumInput
-              value={toFixed(pump.round, 2)}
+            <DecimalInput
+              value={pump.round}
               onChange={(v) => onChange('round', v)}
               disabled={fieldsDisabled}
-              min={0}
-              step="0.01"
+              decimals={2}
               className="w-full"
             />
           </Field>
@@ -357,19 +423,27 @@ const PumpForm: FC<PumpFormProps> = ({ pumps, activePumpIdx, onChange, disabled 
             />
           </Field>
           <Field label={t('pumps.pricePerLiter')}>
-            <NumInput
-              value={toFixed(pump.price, 3)}
+            <DecimalInput
+              value={pump.price}
               onChange={(v) => onChange('price', v)}
               disabled={fieldsDisabled}
-              min={0}
-              step="0.001"
+              decimals={3}
               className="w-full"
             />
           </Field>
           <Field label={t('pumps.totalizer')}>
-            <span className="text-xs text-zinc-300 font-mono bg-zinc-800 border border-zinc-700 rounded px-2 py-1 block">
-              {pump.total}
-            </span>
+            {pump.type === '1' ? (
+              <DecimalInput
+                value={pump.total}
+                onChange={(v) => onChange('total', v)}
+                disabled={fieldsDisabled}
+                className="w-full"
+              />
+            ) : (
+              <span className="text-xs text-zinc-300 font-mono bg-zinc-800 border border-zinc-700 rounded px-2 py-1 block">
+                {pump.total}
+              </span>
+            )}
           </Field>
           <div />
           <div />
