@@ -49,7 +49,14 @@ export const DiagnosticsTab: FC = () => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [isSending, setIsSending] = useState(false);
 
+  // Custom right-click menu state. `target=log` shows just Copy (selection),
+  // `target=input` shows Cut/Copy/Paste for the command field. We render our
+  // own menu instead of relying on Electron's native one so the labels are
+  // localized and the actions can use clipboard / DOM APIs directly.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: 'log' | 'input' } | null>(null);
+
   const logRef = useRef<HTMLPreElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const addTimeRef = useRef(addTime);
   addTimeRef.current = addTime;
 
@@ -165,6 +172,132 @@ export const DiagnosticsTab: FC = () => {
     clearLog();
   }, [clearLog]);
 
+  // ---- Context-menu actions ----
+
+  // Copy current text selection (works for both the log <pre> and the input).
+  // Falls back to copying the whole log if there's no live selection but the
+  // menu was opened on the log.
+  const ctxCopySelection = useCallback(async () => {
+    const sel = window.getSelection()?.toString() ?? '';
+    const text = sel || (ctxMenu?.target === 'log' ? log : '');
+    if (text) {
+      try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+    }
+    setCtxMenu(null);
+  }, [ctxMenu, log]);
+
+  // Cut: copy the current selection in the input and remove it from the value.
+  const ctxCutInput = useCallback(async () => {
+    const el = inputRef.current;
+    if (el) {
+      const start = el.selectionStart ?? 0;
+      const end = el.selectionEnd ?? 0;
+      if (start !== end) {
+        const cut = commandInput.slice(start, end);
+        try { await navigator.clipboard.writeText(cut); } catch { /* ignore */ }
+        setCommandInput((commandInput.slice(0, start) + commandInput.slice(end)).toUpperCase());
+      }
+    }
+    setCtxMenu(null);
+  }, [commandInput, setCommandInput]);
+
+  // Remove the currently-selected text from the log. The <pre> renders `log`
+  // directly, so its textContent maps 1:1 onto the store string — we walk the
+  // pre's text nodes to translate the selection's DOM range into character
+  // offsets, then splice them out.
+  const ctxDeleteLogSelection = useCallback(() => {
+    const pre = logRef.current;
+    const sel = window.getSelection();
+    if (!pre || !sel || sel.rangeCount === 0) { setCtxMenu(null); return; }
+    const range = sel.getRangeAt(0);
+    if (!pre.contains(range.startContainer) || !pre.contains(range.endContainer)) {
+      setCtxMenu(null); return;
+    }
+    const offsetWithin = (container: Node, offset: number): number => {
+      let total = 0;
+      const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT, null);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node === container) return total + offset;
+        total += node.textContent?.length ?? 0;
+      }
+      return total;
+    };
+    const lo = Math.min(offsetWithin(range.startContainer, range.startOffset),
+                       offsetWithin(range.endContainer, range.endOffset));
+    const hi = Math.max(offsetWithin(range.startContainer, range.startOffset),
+                       offsetWithin(range.endContainer, range.endOffset));
+    if (lo === hi) { setCtxMenu(null); return; }
+    const newLog = log.slice(0, lo) + log.slice(hi);
+    const last = newLog.charAt(newLog.length - 1);
+    useDiagnosticsStore.setState({
+      log: newLog,
+      atLineStart: newLog.length === 0 || last === '\n' || last === '\r',
+    });
+    sel.removeAllRanges();
+    setCtxMenu(null);
+  }, [log]);
+
+  // Clear: empties the right surface — the log for the log menu, the command
+  // field for the input menu.
+  const ctxClear = useCallback(() => {
+    if (ctxMenu?.target === 'log') {
+      clearLog();
+    } else if (ctxMenu?.target === 'input') {
+      setCommandInput('');
+    }
+    setCtxMenu(null);
+  }, [ctxMenu, clearLog, setCommandInput]);
+
+  // Select-all over the log: build a Range covering the entire <pre> so the
+  // user can immediately right-click → Copy afterwards.
+  const ctxSelectAllLog = useCallback(() => {
+    if (logRef.current) {
+      const range = document.createRange();
+      range.selectNodeContents(logRef.current);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+    setCtxMenu(null);
+  }, []);
+
+  // Paste: insert clipboard text at the input's caret/selection.
+  const ctxPasteInput = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const el = inputRef.current;
+      const start = el?.selectionStart ?? commandInput.length;
+      const end = el?.selectionEnd ?? commandInput.length;
+      const next = (commandInput.slice(0, start) + text + commandInput.slice(end)).toUpperCase();
+      setCommandInput(next);
+      // Move caret after pasted text on next tick.
+      requestAnimationFrame(() => {
+        if (el) {
+          const pos = start + text.length;
+          el.focus();
+          el.setSelectionRange(pos, pos);
+        }
+      });
+    } catch { /* ignore */ }
+    setCtxMenu(null);
+  }, [commandInput, setCommandInput]);
+
+  // Dismiss menu on any outside interaction or Escape.
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null); };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('blur', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('blur', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Top controls */}
@@ -211,6 +344,10 @@ export const DiagnosticsTab: FC = () => {
         <pre
           ref={logRef}
           onScroll={handleLogScroll}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtxMenu({ x: e.clientX, y: e.clientY, target: 'log' });
+          }}
           className={`flex-1 p-2 text-xs text-[var(--terminal-fg)] bg-zinc-950 font-mono overflow-auto select-text ${
             wordWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
           }`}
@@ -242,10 +379,15 @@ export const DiagnosticsTab: FC = () => {
       {/* Bottom: command input */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-t border-zinc-700 bg-zinc-900/50">
         <input
+          ref={inputRef}
           type="text"
           value={commandInput}
           onChange={(e) => setCommandInput(e.target.value.toUpperCase())}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtxMenu({ x: e.clientX, y: e.clientY, target: 'input' });
+          }}
           placeholder={t('diag.commandPlaceholder')}
           autoCapitalize="off"
           autoCorrect="off"
@@ -267,6 +409,92 @@ export const DiagnosticsTab: FC = () => {
           {t('diag.clear')}
         </button>
       </div>
+
+      {/* Right-click context menu */}
+      {ctxMenu && (() => {
+        // The command input lives at the bottom of the tab — opening downward
+        // gets clipped by the window. Anchor by `bottom` for the input so the
+        // menu grows upward from the click; for the log, keep the normal
+        // downward layout.
+        const style: React.CSSProperties = ctxMenu.target === 'input'
+          ? { position: 'fixed', left: ctxMenu.x, bottom: window.innerHeight - ctxMenu.y, zIndex: 50 }
+          : { position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 50 };
+        return (
+          <div
+            // Stop the global mousedown listener from closing the menu before
+            // the menu item's onClick fires.
+            onMouseDown={(e) => e.stopPropagation()}
+            style={style}
+            className="min-w-[140px] bg-zinc-900 border border-zinc-700 rounded shadow-lg py-1 text-xs text-zinc-200"
+          >
+            {ctxMenu.target === 'input' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={ctxCutInput}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                >
+                  {t('diag.ctxCut')}
+                </button>
+                <button
+                  type="button"
+                  onClick={ctxCopySelection}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                >
+                  {t('diag.ctxCopy')}
+                </button>
+                <button
+                  type="button"
+                  onClick={ctxPasteInput}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                >
+                  {t('diag.ctxPaste')}
+                </button>
+                <div className="my-1 border-t border-zinc-700" />
+                <button
+                  type="button"
+                  onClick={ctxClear}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 text-red-400"
+                >
+                  {t('diag.ctxClear')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={ctxCopySelection}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                >
+                  {t('diag.ctxCopy')}
+                </button>
+                <button
+                  type="button"
+                  onClick={ctxSelectAllLog}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                >
+                  {t('diag.ctxSelectAll')}
+                </button>
+                <button
+                  type="button"
+                  onClick={ctxDeleteLogSelection}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                >
+                  {t('diag.ctxDelete')}
+                </button>
+                <div className="my-1 border-t border-zinc-700" />
+                <button
+                  type="button"
+                  onClick={ctxClear}
+                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 text-red-400"
+                >
+                  {t('diag.ctxClear')}
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

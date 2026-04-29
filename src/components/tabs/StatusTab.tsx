@@ -274,7 +274,17 @@ export const StatusTab: FC = () => {
   usePolling(gsmCommands, isConnected && initDone && !imeiLoaded, handleGsmResponse, 1000, 50, handlePasswordError);
 
   // --- Phase 3: Cyclic polling for everything else ---
-  const pollingCommands = useMemo(() => buildPollingCommands(password), [password]);
+  // Filter LLS polling to enabled sensors once the FLS settings are loaded.
+  // Before that (flsSensors === null), poll all 6 to keep the original behavior.
+  const flsSensors = useSettingsStore((s) => s.flsSensors);
+  const enabledLls = useMemo(
+    () => flsSensors?.map((s) => s.enable) ?? null,
+    [flsSensors],
+  );
+  const pollingCommands = useMemo(
+    () => buildPollingCommands(password, enabledLls ?? undefined),
+    [password, enabledLls],
+  );
 
   const handleResponse = useCallback((_cmd: string, response: string) => {
     addDebugLine(`TX → ${_cmd}`);
@@ -520,6 +530,10 @@ export const StatusTab: FC = () => {
             </thead>
             <tbody>
               {lls.map((sensor, i) => {
+                // Skip sensors that are disabled in the FLS settings. While
+                // `enabledLls` is null (settings not yet read), fall through
+                // and render all rows like before.
+                if (enabledLls && !enabledLls[i]) return null;
                 const noData = !sensor.height && !sensor.volume;
                 const disconnected = sensor.height === '-1' && sensor.volume === '-1';
                 if (noData) {

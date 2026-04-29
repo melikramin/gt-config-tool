@@ -295,6 +295,12 @@ export const en: Translations = {
   'diag.copied': 'Copied to clipboard',
   'diag.saved': 'Log saved',
   'diag.notConnected': 'Not connected',
+  'diag.ctxCopy': 'Copy',
+  'diag.ctxCut': 'Cut',
+  'diag.ctxPaste': 'Paste',
+  'diag.ctxSelectAll': 'Select All',
+  'diag.ctxDelete': 'Delete',
+  'diag.ctxClear': 'Clear',
 
   // FLS (Level sensors) tab
   'fls.panelSensors': 'Level sensors',
@@ -352,6 +358,7 @@ export const en: Translations = {
   'pumps.relay2Start': 'Start, L',
   'pumps.relay2Stop': 'Stop, L',
   'pumps.passiveRfid': 'Passive RFID',
+  'pumps.totalCheck': 'Totalizer verification',
   'pumps.rounding': 'Rounding',
   'pumps.pricePerLiter': 'Price per L',
   'pumps.reading': 'Reading...',

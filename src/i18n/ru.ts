@@ -295,6 +295,12 @@ export const ru: Translations = {
   'diag.copied': 'Скопировано в буфер',
   'diag.saved': 'Лог сохранён',
   'diag.notConnected': 'Нет подключения',
+  'diag.ctxCopy': 'Копировать',
+  'diag.ctxCut': 'Вырезать',
+  'diag.ctxPaste': 'Вставить',
+  'diag.ctxSelectAll': 'Выделить всё',
+  'diag.ctxDelete': 'Удалить',
+  'diag.ctxClear': 'Очистить',
 
   // FLS (Level sensors) tab
   'fls.panelSensors': 'Датчики уровня',
@@ -352,6 +358,7 @@ export const ru: Translations = {
   'pumps.relay2Start': 'Начать, л.',
   'pumps.relay2Stop': 'Стоп, л.',
   'pumps.passiveRfid': 'Пассив RFID',
+  'pumps.totalCheck': 'Сверка сумматора',
   'pumps.rounding': 'Округ.',
   'pumps.pricePerLiter': 'Цена за л.',
   'pumps.reading': 'Чтение…',

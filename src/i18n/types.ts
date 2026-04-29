@@ -296,6 +296,12 @@ export interface Translations {
   'diag.copied': string;
   'diag.saved': string;
   'diag.notConnected': string;
+  'diag.ctxCopy': string;
+  'diag.ctxCut': string;
+  'diag.ctxPaste': string;
+  'diag.ctxSelectAll': string;
+  'diag.ctxDelete': string;
+  'diag.ctxClear': string;
 
   // FLS (Level sensors) tab
   'fls.panelSensors': string;
@@ -353,6 +359,7 @@ export interface Translations {
   'pumps.relay2Start': string;
   'pumps.relay2Stop': string;
   'pumps.passiveRfid': string;
+  'pumps.totalCheck': string;
   'pumps.rounding': string;
   'pumps.pricePerLiter': string;
   'pumps.reading': string;
