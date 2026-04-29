@@ -445,8 +445,18 @@ const PumpForm: FC<PumpFormProps> = ({ pumps, activePumpIdx, onChange, disabled 
               </span>
             )}
           </Field>
-          <div />
-          <div />
+          <div className="col-span-2 flex items-end pb-0.5">
+            <label className="flex items-center gap-1.5 text-xs text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pump.totalCheck === '1'}
+                onChange={(e) => onChange('totalCheck', e.target.checked ? '1' : '0')}
+                disabled={fieldsDisabled}
+                className="accent-blue-500 disabled:opacity-40"
+              />
+              {t('pumps.totalCheck')}
+            </label>
+          </div>
         </div>
       </div>
     </Panel>

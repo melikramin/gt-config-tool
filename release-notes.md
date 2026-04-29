@@ -1,9 +1,9 @@
-Release 2.1.2 — Pumps tab fixes
+Release 2.1.3 — Pump verification, GSM status fix, cleaner Status panel
 
-Fixes:
-• Decimal fields (Start L, Stop L, Rounding, Price per L, Imp/L) can now be edited normally — typing "1.12" no longer gets snapped back on every keystroke.
-• Comma input from the numeric keypad is auto-converted to a dot, so values entered on systems with a "," decimal separator are accepted by the device (which only supports ".").
-• Start L / Stop L / Rounding are now displayed as #.## and Price per L as #.### (formatted on blur, free typing while focused).
+What's new
+• Pumps: new "Totalizer verification" option. When turned on, the controller compares the dispensed volume to the totalizer change at the end of every fueling. If they don't match, it uses the totalizer change as the actual dispensed amount — protects you from missed pulses.
+• Diagnostics terminal: right-click anywhere in the log or command box for a familiar menu — Copy, Paste, Cut, Select All, Delete and Clear.
 
-New:
-• Totalizer is editable in PULSER mode — useful when re-syncing the controller's totalizer with a meter reading. Read-only for other pump types.
+Fixes
+• GSM status sometimes showed "No HW" while the device was actually online. Now the panel always displays the real connection state.
+• Status panel — "Level Sensors": only the sensors you've enabled in the FLS tab are shown and polled. Disabled sensors no longer clutter the panel or use background traffic.

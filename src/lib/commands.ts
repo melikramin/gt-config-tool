@@ -63,24 +63,30 @@ export function buildGsmCommand(password: string): string {
   return buildCmd(password, 'GSM');
 }
 
-/** Cyclic polling commands for the Status tab (everything except DEV, VER, GSM). */
-export function buildPollingCommands(password: string): string[] {
-  return [
+/**
+ * Cyclic polling commands for the Status tab (everything except DEV, VER, GSM).
+ *
+ * `enabledLls` is the per-sensor enable flag (length 6). When provided, only
+ * LLS commands for enabled sensors are included; when omitted, all 6 are
+ * polled (used before the FLS settings have been read).
+ */
+export function buildPollingCommands(password: string, enabledLls?: boolean[]): string[] {
+  const cmds = [
     buildCmd(password, 'DATE'),
     buildCmd(password, 'REP'),
     buildCmd(password, 'FUEL'),
     buildCmd(password, 'IN'),
     buildCmd(password, 'OUT'),
-    buildCmd(password, 'LLS1'),
-    buildCmd(password, 'LLS2'),
-    buildCmd(password, 'LLS3'),
-    buildCmd(password, 'LLS4'),
-    buildCmd(password, 'LLS5'),
-    buildCmd(password, 'LLS6'),
+  ];
+  for (let i = 1; i <= 6; i++) {
+    if (!enabledLls || enabledLls[i - 1]) cmds.push(buildCmd(password, `LLS${i}`));
+  }
+  cmds.push(
     buildCmd(password, 'ENCODER1', ['GET']),
     buildCmd(password, 'ENCODER2', ['GET']),
     buildCmd(password, 'TAGS'),
-  ];
+  );
+  return cmds;
 }
 
 /** Build command to toggle output ON/OFF: $PASS;OUTn;;value */
@@ -895,7 +901,8 @@ export const PUMP_RELAY2_OPTIONS_RU: Array<{ value: string; label: string }> = [
  * Field [10] (total) is read-only; the rest are writable.
  *
  * Fields: TYPE, INPUT, PRODUCT, OUTPUT, RFID_ID, PULSE, START_TOUT, STOP_TOUT,
- *         RFID_TOUT, TOTAL(ro), 2ND_OUT, 2ND_START, 2ND_STOP, RFID_MODE, ROUND, PRICE
+ *         RFID_TOUT, TOTAL(ro), 2ND_OUT, 2ND_START, 2ND_STOP, RFID_MODE, ROUND, PRICE,
+ *         TOTAL_CHECK
  */
 export interface PumpParams {
   type: string;        // [1] 0=NO, 1=PULSER, etc.
@@ -914,6 +921,7 @@ export interface PumpParams {
   rfidMode: string;    // [14] 0/1 passive RFID
   round: string;       // [15] float
   price: string;       // [16] float
+  totalCheck: string;  // [17] 0/1 totalizer verification — at end of fueling, if dispensed volume differs from totalizer delta, the controller assigns the totalizer delta as the dispensed volume
   extra: string[];     // any undocumented trailing fields
 }
 
@@ -934,6 +942,7 @@ export const EMPTY_PUMP: PumpParams = {
   rfidMode: '0',
   round: '0',
   price: '0',
+  totalCheck: '0',
   extra: [],
 };
 
@@ -944,7 +953,7 @@ export function buildPumpReadCmd(password: string, index: number): string {
 
 /**
  * Write pump config: `$PASS;PUMPn;TYPE;INPUT;PRODUCT;OUTPUT;RFID_ID;PULSE;
- * START_TOUT;STOP_TOUT;RFID_TOUT;TOTAL;2ND_OUT;2ND_START;2ND_STOP;RFID_MODE;ROUND;PRICE`.
+ * START_TOUT;STOP_TOUT;RFID_TOUT;TOTAL;2ND_OUT;2ND_START;2ND_STOP;RFID_MODE;ROUND;PRICE;TOTAL_CHECK`.
  * TOTAL is read-only but must be included in the write to maintain field positions.
  */
 export function buildPumpWriteCmd(password: string, index: number, p: PumpParams): string {
@@ -952,13 +961,13 @@ export function buildPumpWriteCmd(password: string, index: number, p: PumpParams
     p.type, p.input, p.product, p.output, p.rfidId,
     p.pulse, p.startTout, p.stopTout, p.rfidTout,
     p.total, p.secondOut, p.secondStart, p.secondStop,
-    p.rfidMode, p.round, p.price, ...p.extra,
+    p.rfidMode, p.round, p.price, p.totalCheck, ...p.extra,
   ]);
 }
 
 /**
  * Parse `$PUMPn;TYPE;INPUT;PRODUCT;OUTPUT;RFID_ID;PULSE;START_TOUT;STOP_TOUT;
- * RFID_TOUT;TOTAL;2ND_OUT;2ND_START;2ND_STOP;RFID_MODE;ROUND;PRICE[;extra...]`.
+ * RFID_TOUT;TOTAL;2ND_OUT;2ND_START;2ND_STOP;RFID_MODE;ROUND;PRICE;TOTAL_CHECK[;extra...]`.
  */
 export function parsePumpResponse(raw: string): PumpParams | null {
   const t = raw.trim().replace(/^\$/, '');
@@ -981,7 +990,8 @@ export function parsePumpResponse(raw: string): PumpParams | null {
     rfidMode:    parts[14] ?? '0',
     round:       parts[15] ?? '0',
     price:       parts[16] ?? '0',
-    extra:       parts.slice(17),
+    totalCheck:  parts[17] ?? '0',
+    extra:       parts.slice(18),
   };
 }
 

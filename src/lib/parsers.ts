@@ -36,19 +36,24 @@ export function gsmStatusText(hexCode: string, locale: string): string {
   if (isNaN(val)) return `0x${hexCode}`;
   const ru = locale === 'ru';
 
-  if (val === 0)     return ru ? 'Инициализация' : 'Initializing';
-  if (!(val & 0x01)) return ru ? 'Нет модуля'    : 'No HW';
-  if (!(val & 0x80)) return ru ? 'Нет SIM'       : 'No SIM';
-  if (!(val & 0x02)) return ru ? 'Выключен'      : 'Off';
-  if (!(val & 0x04)) return ru ? 'Нет сигнала'   : 'No Signal';
-  if (!(val & 0x08)) return ru ? 'Подключение'   : 'Connecting';
+  if (val === 0) return ru ? 'Инициализация' : 'Initializing';
 
-  // connected (bit3 set)
-  const parts: string[] = [];
-  parts.push(ru ? 'Подключён' : 'Connected');
-  if (val & 0x10) parts.push(ru ? 'роуминг' : 'roaming');
-  if (val & 0x40) parts.push(ru ? 'глушение' : 'jamming');
-  return parts.join(', ');
+  // Trust the high-level connection bits first: real firmware may report a
+  // fully-online modem with bit3 (connected) set but bit0/bit1 (hw/on) clear
+  // — checking the lower-level prerequisites first wrongly reports "No HW".
+  if (val & 0x08) {
+    const parts: string[] = [];
+    parts.push(ru ? 'Подключён' : 'Connected');
+    if (val & 0x10) parts.push(ru ? 'роуминг' : 'roaming');
+    if (val & 0x40) parts.push(ru ? 'глушение' : 'jamming');
+    return parts.join(', ');
+  }
+  if (val & 0x04) return ru ? 'Подключение' : 'Connecting';
+
+  if (!(val & 0x01)) return ru ? 'Нет модуля' : 'No HW';
+  if (!(val & 0x80)) return ru ? 'Нет SIM'    : 'No SIM';
+  if (!(val & 0x02)) return ru ? 'Выключен'   : 'Off';
+  return ru ? 'Нет сигнала' : 'No Signal';
 }
 
 // ---- WiFi status (bitfield from REP, matches WIFI_STATUS_T) ----
