@@ -443,6 +443,10 @@ export interface Translations {
   'sec.authMethod1': string;
   'sec.authMethod2': string;
   'sec.onlineTimeout': string;
+  'sec.panelDateSync': string;
+  'sec.dateSyncGps': string;
+  'sec.dateSyncNtp': string;
+  'sec.dateSyncGsm': string;
   'sec.reading': string;
   'sec.saving': string;
   'sec.readSuccess': string;

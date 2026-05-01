@@ -12,16 +12,21 @@ import {
   buildBypassWriteCmd,
   buildPumpsecReadCmd,
   buildPumpsecWriteCmd,
+  buildDateReadCmd,
+  buildDateSyncWriteCmd,
   parseEmstopResponse,
   parseTagcfgResponse,
   parseBypassResponse,
   parsePumpsecResponse,
+  parseDateSyncResponse,
   TAGCFG_MODE_VALUES,
   PUMPSEC_AUTH_METHOD_VALUES,
+  EMPTY_DATE_SYNC,
   type EmstopParams,
   type TagcfgParams,
   type BypassParams,
   type PumpsecParams,
+  type DateSyncParams,
 } from '../../lib/commands';
 import type { Translations } from '../../i18n/types';
 
@@ -152,11 +157,13 @@ export const SecurityTab: FC = () => {
   const storeTagcfg = useSettingsStore((s) => s.securityTagcfg);
   const storeBypass = useSettingsStore((s) => s.securityBypass);
   const storePumpsec = useSettingsStore((s) => s.securityPumpsec);
+  const storeDateSync = useSettingsStore((s) => s.securityDateSync);
 
   const [emstop, setEmstop] = useState<EmstopParams>(() => storeEmstop || EMPTY_EMSTOP);
   const [tagcfg, setTagcfg] = useState<TagcfgParams>(() => storeTagcfg || EMPTY_TAGCFG);
   const [bypass, setBypass] = useState<BypassParams>(() => storeBypass || EMPTY_BYPASS);
   const [pumpsec, setPumpsec] = useState<PumpsecParams>(() => storePumpsec || EMPTY_PUMPSEC);
+  const [dateSync, setDateSync] = useState<DateSyncParams>(() => storeDateSync || EMPTY_DATE_SYNC);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -167,7 +174,8 @@ export const SecurityTab: FC = () => {
     if (storeTagcfg) setTagcfg(storeTagcfg);
     if (storeBypass) setBypass(storeBypass);
     if (storePumpsec) setPumpsec(storePumpsec);
-  }, [storeEmstop, storeTagcfg, storeBypass, storePumpsec]);
+    if (storeDateSync) setDateSync(storeDateSync);
+  }, [storeEmstop, storeTagcfg, storeBypass, storePumpsec, storeDateSync]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -175,6 +183,7 @@ export const SecurityTab: FC = () => {
       setTagcfg(EMPTY_TAGCFG);
       setBypass(EMPTY_BYPASS);
       setPumpsec(EMPTY_PUMPSEC);
+      setDateSync(EMPTY_DATE_SYNC);
       setStatusMsg('');
     }
   }, [isConnected]);
@@ -216,11 +225,19 @@ export const SecurityTab: FC = () => {
       const p = parsePumpsecResponse(respP);
       if (!p) throw new Error('PUMPSEC: malformed response');
 
+      const respD = await window.serial.sendCommand(buildDateReadCmd(password));
+      if (isPasswordError(respD)) { await handlePasswordError(); return; }
+      if (isErrorResponse(respD)) throw new Error(`DATE: ${respD.trim()}`);
+      const ds = parseDateSyncResponse(respD);
+      if (!ds) throw new Error('DATE: malformed response');
+
       setEmstop(e);
       setTagcfg(tc);
       setBypass(b);
       setPumpsec(p);
+      setDateSync(ds);
       useSettingsStore.getState().setSecuritySettings(e, tc, b, p);
+      useSettingsStore.getState().setSecurityDateSync(ds);
       setStatusMsg(t('sec.readSuccess'));
     } catch (err) {
       setStatusMsg(`${t('sec.readError')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -256,13 +273,18 @@ export const SecurityTab: FC = () => {
       if (isPasswordError(respP)) { await handlePasswordError(); return; }
       if (isErrorResponse(respP)) throw new Error(`PUMPSEC: ${respP.trim()}`);
 
+      const respD = await window.serial.sendCommand(buildDateSyncWriteCmd(password, dateSync));
+      if (isPasswordError(respD)) { await handlePasswordError(); return; }
+      if (isErrorResponse(respD)) throw new Error(`DATE: ${respD.trim()}`);
+      useSettingsStore.getState().setSecurityDateSync(dateSync);
+
       setStatusMsg(t('sec.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('sec.saveError')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
-  }, [isConnected, password, emstop, tagcfg, bypass, pumpsec, handlePasswordError, t]);
+  }, [isConnected, password, emstop, tagcfg, bypass, pumpsec, dateSync, handlePasswordError, t]);
 
   const updateEmstop = useCallback(<K extends keyof EmstopParams>(k: K, v: EmstopParams[K]) => {
     setEmstop((prev) => ({ ...prev, [k]: v }));
@@ -275,6 +297,9 @@ export const SecurityTab: FC = () => {
   }, []);
   const updatePumpsec = useCallback(<K extends keyof PumpsecParams>(k: K, v: PumpsecParams[K]) => {
     setPumpsec((prev) => ({ ...prev, [k]: v }));
+  }, []);
+  const updateDateSync = useCallback(<K extends keyof DateSyncParams>(k: K, v: DateSyncParams[K]) => {
+    setDateSync((prev) => ({ ...prev, [k]: v }));
   }, []);
 
   const busy = loading || saving;
@@ -514,11 +539,35 @@ export const SecurityTab: FC = () => {
               <span className="text-xs text-zinc-400 shrink-0">{t('sec.onlineTimeout')}</span>
               <NumberInput
                 value={pumpsec.onlineTimeout}
-                onChange={() => {}}
-                disabled={true}
-                className="w-24 opacity-60"
+                onChange={(v) => updatePumpsec('onlineTimeout', v)}
+                disabled={busy || (pumpsec.authMethod !== '1' && pumpsec.authMethod !== '2')}
+                className="w-24"
               />
             </div>
+          </div>
+        </Panel>
+
+        {/* Panel 6: Time Synchronization */}
+        <Panel title={t('sec.panelDateSync')}>
+          <div className="space-y-2">
+            <Checkbox
+              label={t('sec.dateSyncGps')}
+              checked={dateSync.gpsSync}
+              onChange={(v) => updateDateSync('gpsSync', v)}
+              disabled={busy}
+            />
+            <Checkbox
+              label={t('sec.dateSyncNtp')}
+              checked={dateSync.ntpSync}
+              onChange={(v) => updateDateSync('ntpSync', v)}
+              disabled={busy}
+            />
+            <Checkbox
+              label={t('sec.dateSyncGsm')}
+              checked={dateSync.gsmSync}
+              onChange={(v) => updateDateSync('gsmSync', v)}
+              disabled={busy}
+            />
           </div>
         </Panel>
       </div>

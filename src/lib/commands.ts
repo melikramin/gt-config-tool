@@ -58,6 +58,41 @@ export function formatUtcDateParts(d: Date): { ddmmyy: string; hhmmss: string } 
 /** Device time drift threshold (ms) above which we resync DATE on connect. */
 export const DATE_SYNC_THRESHOLD_MS = 60_000;
 
+/**
+ * Time-sync flags exposed on the Security tab.
+ *
+ * Wire frame: `$DATE;DDMMYY;HHMMSS;HOUR_SHIFT;GPS_SYNC;DST;NTP_SYNC;GSM_SYNC`.
+ * The UI only exposes the three sync flags; on save we send empty DATE/TIME
+ * (`$PASS;DATE;;;+0;<gps>;0;<ntp>;<gsm>`) so the device keeps its current clock.
+ */
+export interface DateSyncParams {
+  gpsSync: boolean;
+  ntpSync: boolean;
+  gsmSync: boolean;
+}
+
+export const EMPTY_DATE_SYNC: DateSyncParams = { gpsSync: false, ntpSync: false, gsmSync: false };
+
+/** Parse `$DATE;DDMMYY;HHMMSS;HOUR_SHIFT;GPS_SYNC;DST;NTP_SYNC;GSM_SYNC` → sync flags only. */
+export function parseDateSyncResponse(raw: string): DateSyncParams | null {
+  const t = raw.trim().replace(/^\$/, '');
+  const parts = t.split(';');
+  if (parts[0] !== 'DATE' || parts.length < 8) return null;
+  return {
+    gpsSync: parts[4] === '1',
+    ntpSync: parts[6] === '1',
+    gsmSync: parts[7] === '1',
+  };
+}
+
+/** Write sync flags only, leaving DATE/TIME empty so the device keeps its clock. */
+export function buildDateSyncWriteCmd(password: string, p: DateSyncParams): string {
+  const gps = p.gpsSync ? '1' : '0';
+  const ntp = p.ntpSync ? '1' : '0';
+  const gsm = p.gsmSync ? '1' : '0';
+  return buildCmd(password, 'DATE', ['', '', '+0', gps, '0', ntp, gsm]);
+}
+
 /** GSM command — polled cyclically until IMEI is loaded. */
 export function buildGsmCommand(password: string): string {
   return buildCmd(password, 'GSM');
@@ -1588,7 +1623,7 @@ export function buildPrinterMakeCmd(password: string): string {
   return buildCmd(password, 'PRINTER', ['MAKE']);
 }
 
-// ---- Camera tab commands (CAMERA0..2) ----
+// ---- Camera tab commands (CAMERA0..1) ----
 
 /** CONFIG can scan all baud rates — give it ample time. */
 export const CAMERA_CONFIG_TIMEOUT_MS = 60_000;
@@ -1596,8 +1631,8 @@ export const CAMERA_CONFIG_TIMEOUT_MS = 60_000;
 /** GETPIC captures + uploads an image — can take a while. */
 export const CAMERA_GETPIC_TIMEOUT_MS = 60_000;
 
-/** Number of camera slots exposed in the UI (0..2). */
-export const CAMERA_SLOT_COUNT = 3;
+/** Number of camera slots exposed in the UI (0..1). */
+export const CAMERA_SLOT_COUNT = 2;
 
 /**
  * Camera per-slot parameters — only the fields we expose in the UI.

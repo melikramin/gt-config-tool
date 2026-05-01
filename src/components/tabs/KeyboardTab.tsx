@@ -205,19 +205,19 @@ export const KeyboardTab: FC = () => {
 
           {/* Column 2 */}
           <CheckboxRow labelKey="kbd.reqLimit" checked={uim.reqLimit} onChange={(v) => updateUim('reqLimit', v)} disabled={busy} />
-          <CheckboxRow labelKey="kbd.checkVid" checked={uim.checkVid} onChange={(v) => updateUim('checkVid', v)} disabled={busy} />
-          <CheckboxRow labelKey="kbd.compareOdo" checked={uim.compareOdo} onChange={(v) => updateUim('compareOdo', v)} disabled={busy} />
+          <CheckboxRow labelKey="kbd.checkVid" checked={uim.checkVid} onChange={(v) => updateUim('checkVid', v)} disabled={busy || !uim.reqVehid} />
+          <CheckboxRow labelKey="kbd.compareOdo" checked={uim.compareOdo} onChange={(v) => updateUim('compareOdo', v)} disabled={busy || !uim.reqOdo} />
           <CheckboxRow labelKey="kbd.termSound" checked={uim.termSound} onChange={(v) => updateUim('termSound', v)} disabled={busy} />
 
           {/* Column 3 */}
           <CheckboxRow labelKey="kbd.reqPin" checked={uim.reqPin} onChange={(v) => updateUim('reqPin', v)} disabled={busy} />
-          <CheckboxRow labelKey="kbd.driverTagType" checked={uimx.driverTagType} onChange={(v) => updateUimx('driverTagType', v)} disabled={busy} />
+          <CheckboxRow labelKey="kbd.driverTagType" checked={uimx.driverTagType} onChange={(v) => updateUimx('driverTagType', v)} disabled={busy || !uim.reqVehid} />
           <CheckboxRow labelKey="kbd.engine" checked={uim.engine} onChange={(v) => updateUim('engine', v)} disabled={busy} />
           <CheckboxRow labelKey="kbd.projectId" checked={uim.projectId} onChange={(v) => updateUim('projectId', v)} disabled={busy} />
 
           {/* Column 4 — partial */}
           <div />
-          <CheckboxRow labelKey="kbd.allowDriverCode" checked={uimx.allowDriverCode} onChange={(v) => updateUimx('allowDriverCode', v)} disabled={busy} />
+          <CheckboxRow labelKey="kbd.allowDriverCode" checked={uimx.allowDriverCode} onChange={(v) => updateUimx('allowDriverCode', v)} disabled={busy || !uim.reqVehid} />
         </div>
 
         {/* Text fields */}

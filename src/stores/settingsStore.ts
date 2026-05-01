@@ -19,6 +19,7 @@ import type {
   PrinterParams,
   PrinterTextFields,
   CameraParams,
+  DateSyncParams,
 } from '../lib/commands';
 
 interface SettingsState {
@@ -69,6 +70,7 @@ interface SettingsState {
   securityTagcfg: TagcfgParams | null;
   securityBypass: BypassParams | null;
   securityPumpsec: PumpsecParams | null;
+  securityDateSync: DateSyncParams | null;
 
   // Printer tab
   printerSettings: PrinterParams | null;
@@ -91,12 +93,13 @@ interface SettingsState {
   setPumpFormats: (formats: PumpFormatParams[]) => void;
   setKeyboardSettings: (uim: UimParams, uimx: UimxParams) => void;
   setSecuritySettings: (emstop: EmstopParams, tagcfg: TagcfgParams, bypass: BypassParams, pumpsec: PumpsecParams) => void;
+  setSecurityDateSync: (dateSync: DateSyncParams) => void;
   setPrinterSettings: (settings: PrinterParams, text: PrinterTextFields) => void;
   setCameras: (cameras: Array<CameraParams | null>) => void;
   clearAll: () => void;
 }
 
-const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
+const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setSecurityDateSync' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
   isReadingAll: false,
   isWritingAll: false,
   serverApn: null,
@@ -122,6 +125,7 @@ const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setS
   securityTagcfg: null,
   securityBypass: null,
   securityPumpsec: null,
+  securityDateSync: null,
   printerSettings: null,
   printerText: null,
   cameras: null,
@@ -143,6 +147,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setKeyboardSettings: (keyboardUim, keyboardUimx) => set({ keyboardUim, keyboardUimx }),
   setSecuritySettings: (securityEmstop, securityTagcfg, securityBypass, securityPumpsec) =>
     set({ securityEmstop, securityTagcfg, securityBypass, securityPumpsec }),
+  setSecurityDateSync: (securityDateSync) => set({ securityDateSync }),
   setPrinterSettings: (printerSettings, printerText) => set({ printerSettings, printerText }),
   setCameras: (cameras) => set({ cameras }),
   clearAll: () => set(INITIAL),

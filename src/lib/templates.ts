@@ -32,6 +32,7 @@ import {
   buildTagcfgWriteCmd,
   buildBypassWriteCmd,
   buildPumpsecWriteCmd,
+  buildDateSyncWriteCmd,
   buildPrinterWriteCmd,
   buildPrntnWriteCmd,
   buildPrntpWriteCmd,
@@ -55,6 +56,7 @@ import {
   parseTagcfgResponse,
   parseBypassResponse,
   parsePumpsecResponse,
+  parseDateSyncResponse,
   parsePrinterResponse,
   parsePrntnResponse,
   parsePrntpResponse,
@@ -71,6 +73,7 @@ import {
   EMPTY_TAGCFG,
   EMPTY_BYPASS,
   EMPTY_PUMPSEC,
+  EMPTY_DATE_SYNC,
   EMPTY_PRINTER,
   EMPTY_CAMERA,
   FLS_MAX_SENSORS,
@@ -221,6 +224,9 @@ export function buildTemplateCommands(): string[] | null {
   if (settings.securityPumpsec) {
     lines.push(buildPumpsecWriteCmd(password, settings.securityPumpsec));
   }
+  if (settings.securityDateSync) {
+    lines.push(buildDateSyncWriteCmd(password, settings.securityDateSync));
+  }
 
   // ---- Printer ----
   if (settings.printerSettings) {
@@ -329,6 +335,7 @@ export function loadTemplateFromText(text: string): number {
   let tagcfg = settings.securityTagcfg;
   let bypass = settings.securityBypass;
   let pumpsec = settings.securityPumpsec;
+  let dateSync = settings.securityDateSync;
   let printer = settings.printerSettings;
   let stationName: string | null = null;
   let phone: string | null = null;
@@ -482,6 +489,11 @@ export function loadTemplateFromText(text: string): number {
       if (pumpsec) parsed++;
       continue;
     }
+    if (cmd === 'DATE') {
+      const ds = parseDateSyncResponse(response);
+      if (ds) { dateSync = ds; parsed++; }
+      continue;
+    }
 
     // ---- Printer ----
     if (cmd === 'PRINTER') {
@@ -615,6 +627,9 @@ export function loadTemplateFromText(text: string): number {
       bypass ?? settings.securityBypass ?? { ...EMPTY_BYPASS },
       pumpsec ?? settings.securityPumpsec ?? { ...EMPTY_PUMPSEC },
     );
+  }
+  if (dateSync) {
+    settings.setSecurityDateSync(dateSync ?? settings.securityDateSync ?? { ...EMPTY_DATE_SYNC });
   }
 
   if (printer || stationName != null || phone != null || website != null) {

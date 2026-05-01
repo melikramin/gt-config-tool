@@ -340,7 +340,7 @@ export const CameraTab: FC = () => {
   }
 
   const cam = cameras[activeSlot];
-  // Camera0 is RS232; Camera1/2 are on RS485.
+  // Camera0 is RS232; Camera1 is on RS485.
   const interfaceLabel = activeSlot === 0 ? t('camera.rs232') : t('camera.rs485');
 
   return (

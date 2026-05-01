@@ -29,6 +29,7 @@ import {
   buildTagcfgReadCmd,
   buildBypassReadCmd,
   buildPumpsecReadCmd,
+  buildDateReadCmd,
   buildPrinterReadCmd,
   buildPrntnReadCmd,
   buildPrntpReadCmd,
@@ -49,6 +50,7 @@ import {
   parseTagcfgResponse,
   parseBypassResponse,
   parsePumpsecResponse,
+  parseDateSyncResponse,
   parsePrinterResponse,
   parsePrntnResponse,
   parsePrntpResponse,
@@ -68,6 +70,7 @@ import {
   EMPTY_TAGCFG,
   EMPTY_BYPASS,
   EMPTY_PUMPSEC,
+  EMPTY_DATE_SYNC,
   EMPTY_PRINTER,
   EMPTY_CAMERA,
   CAMERA_SLOT_COUNT,
@@ -127,8 +130,8 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
 
   // Total steps for progress
   // Server:2, Protocol:2, WiFi:1+up to 5, GPS:3, IO:1+6+2, RS:6, FLS:6,
-  // Pumps:4, PumpFmt:4, Keyboard:2, Security:4, Printer:4, Camera:CAMERA_SLOT_COUNT
-  const TOTAL_STEPS = 52 + CAMERA_SLOT_COUNT;
+  // Pumps:4, PumpFmt:4, Keyboard:2, Security:5 (incl. DATE), Printer:4, Camera:CAMERA_SLOT_COUNT
+  const TOTAL_STEPS = 53 + CAMERA_SLOT_COUNT;
   let step = 0;
 
   const progress = (text: string) => {
@@ -350,7 +353,13 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
     if (isPasswordError(pumpsecResp)) { await callbacks.onPasswordError(); return false; }
     const pumpsec = (!isErrorResponse(pumpsecResp) && parsePumpsecResponse(pumpsecResp)) || { ...EMPTY_PUMPSEC };
 
+    progress('DATE');
+    const dateResp = await window.serial.sendCommand(buildDateReadCmd(password));
+    if (isPasswordError(dateResp)) { await callbacks.onPasswordError(); return false; }
+    const dateSync = (!isErrorResponse(dateResp) && parseDateSyncResponse(dateResp)) || { ...EMPTY_DATE_SYNC };
+
     settings.setSecuritySettings(emstop, tagcfg, bypass, pumpsec);
+    settings.setSecurityDateSync(dateSync);
 
     // ---- Printer ----
     progress('PRINTER');
