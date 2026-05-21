@@ -15,6 +15,11 @@ import {
   parseDateResponseToUtcMs,
   formatUtcDateParts,
   DATE_SYNC_THRESHOLD_MS,
+  buildPumpReadCmd,
+  parsePumpResponse,
+  EMPTY_PUMP,
+  PUMP_COUNT,
+  type PumpParams,
 } from '../../lib/commands';
 import {
   parseDev,
@@ -123,6 +128,8 @@ export const StatusTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const isReadingAll = useSettingsStore((s) => s.isReadingAll);
   const isWritingAll = useSettingsStore((s) => s.isWritingAll);
+  const storePumps = useSettingsStore((s) => s.pumps);
+  const setPumpsSettings = useSettingsStore((s) => s.setPumpsSettings);
   const { t, locale } = useI18n();
 
   const [state, setState] = useState<StatusState>(INITIAL_STATE);
@@ -272,6 +279,34 @@ export const StatusTab: FC = () => {
   }, [addDebugLine, setDeviceImei]);
 
   usePolling(gsmCommands, isConnected && initDone && !imeiLoaded, handleGsmResponse, 1000, 50, handlePasswordError);
+
+  // --- One-shot: load pump types so Status pump panel can show
+  // active vs. inactive (PUMPn;0 = inactive). Skipped if settings
+  // already populated by Pumps tab or "Read all". ---
+  useEffect(() => {
+    if (!isConnected || !initDone) return;
+    if (storePumps !== null) return;
+    let cancelled = false;
+    (async () => {
+      const pumps: PumpParams[] = [];
+      for (let i = 1; i <= PUMP_COUNT; i++) {
+        if (cancelled) return;
+        try {
+          const cmd = buildPumpReadCmd(password, i);
+          addDebugLine(`TX → ${cmd}`);
+          const resp = await window.serial.sendCommand(cmd);
+          addDebugLine(`RX ← ${resp}`);
+          const p = parsePumpResponse(resp);
+          pumps.push(p || { ...EMPTY_PUMP });
+        } catch (err) {
+          addDebugLine(`ERR: ${(err as Error).message}`);
+          pumps.push({ ...EMPTY_PUMP });
+        }
+      }
+      if (!cancelled) setPumpsSettings(pumps);
+    })();
+    return () => { cancelled = true; };
+  }, [isConnected, initDone, storePumps, password, addDebugLine, setPumpsSettings]);
 
   // --- Phase 3: Cyclic polling for everything else ---
   // Filter LLS polling to enabled sensors once the FLS settings are loaded.
@@ -430,15 +465,18 @@ export const StatusTab: FC = () => {
         </Panel>
 
         {/* ---- 3. Pumps ---- */}
+        {/* Active state comes from the pump config (PUMPn;TYPE).
+            TYPE=0 means the pump slot is not configured — show it
+            faded. The first FUEL field is not a status flag. */}
         <Panel title={t('status.pumps')}>
           <div className="grid grid-cols-4 gap-2 text-center">
             {fuel.pumps.map((p, i) => {
-              const active = p.status !== '' && p.status !== '-0001';
+              const configured = storePumps ? storePumps[i]?.type !== '0' : true;
               return (
-                <div key={i} className="space-y-1">
+                <div key={i} className={`space-y-1 ${configured ? '' : 'opacity-40'}`}>
                   <div
                     className={`text-xs font-bold rounded px-1 py-0.5 ${
-                      active ? 'bg-green-800 text-green-200' : 'bg-red-900/60 text-red-300'
+                      configured ? 'bg-green-800 text-green-200' : 'bg-zinc-800 text-zinc-500'
                     }`}
                   >
                     P{i + 1}

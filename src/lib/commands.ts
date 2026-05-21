@@ -1279,40 +1279,58 @@ export function parseEmstopResponse(raw: string): EmstopParams | null {
 
 /**
  * Tag authorization config.
- * Read/Write: `$PASS;TAGCFG[;MODE;MASK;SAVE_SD]`
+ * Read/Write: `$PASS;TAGCFG[;MODE;MASK;SAVE_SD;BYTE_LEN;ENDIAN]`
  */
 export interface TagcfgParams {
   mode: string;    // [1] 0=Memory, 1=Memory+Filter, 2=AnyTag
   mask: string;    // [2] 12-char hex mask (e.g. xxxxxxxxxxxx)
   saveSd: boolean; // [3]
+  byteLen: string; // [4] 6 | 5 | 4 (tag byte length)
+  endian: string;  // [5] 1=little endian, 0=big endian
 }
 
 export const EMPTY_TAGCFG: TagcfgParams = {
   mode: '0',
   mask: 'xxxxxxxxxxxx',
   saveSd: false,
+  byteLen: '6',
+  endian: '1',
 };
 
 /** TAGCFG mode values (labels are i18n keys: sec.tagcfgMode0, sec.tagcfgMode1, sec.tagcfgMode2). */
 export const TAGCFG_MODE_VALUES = ['0', '1', '2'] as const;
+
+/** TAGCFG byte length values (6, 5, 4). */
+export const TAGCFG_BYTE_LEN_VALUES = ['6', '5', '4'] as const;
+
+/** TAGCFG endian values (labels are i18n keys: sec.tagcfgEndian0, sec.tagcfgEndian1). */
+export const TAGCFG_ENDIAN_VALUES = ['1', '0'] as const;
 
 export function buildTagcfgReadCmd(password: string): string {
   return buildCmd(password, 'TAGCFG');
 }
 
 export function buildTagcfgWriteCmd(password: string, p: TagcfgParams): string {
-  return buildCmd(password, 'TAGCFG', [p.mode, p.mask, p.saveSd ? '1' : '0']);
+  return buildCmd(password, 'TAGCFG', [
+    p.mode,
+    p.mask,
+    p.saveSd ? '1' : '0',
+    p.byteLen,
+    p.endian,
+  ]);
 }
 
-/** Parse `$TAGCFG;MODE;MASK;SAVE_SD`. */
+/** Parse `$TAGCFG;MODE;MASK;SAVE_SD[;BYTE_LEN;ENDIAN]`. */
 export function parseTagcfgResponse(raw: string): TagcfgParams | null {
   const t = raw.trim().replace(/^\$/, '');
   const parts = t.split(';');
   if (parts[0] !== 'TAGCFG' || parts.length < 4) return null;
   return {
-    mode:   parts[1] ?? '0',
-    mask:   parts[2] ?? 'xxxxxxxxxxxx',
-    saveSd: parts[3] === '1',
+    mode:    parts[1] ?? '0',
+    mask:    parts[2] ?? 'xxxxxxxxxxxx',
+    saveSd:  parts[3] === '1',
+    byteLen: parts[4] ?? '6',
+    endian:  parts[5] ?? '1',
   };
 }
 
@@ -1355,13 +1373,13 @@ export function parseBypassResponse(raw: string): BypassParams | null {
 
 /**
  * Pump security settings.
- * Read: `$PUMPSEC;f1..f10` (10 fields). Write: 9 fields (last is read-only).
+ * Read and write both use all 10 fields: `$PUMPSEC;f1..f10`.
  *
  * Fields:
  * [1] MAX_DOZE_EN, [2] LOW_LVL_EN, [3] LOW_LVL_THRESH, [4] MAX_DOZE_THRESH,
  * [5] ALARM_EN, [6] ALARM_OUTPUT, [7] ALARM_TIMER,
  * [8] AUTH_TYPE (hex bitmask), [9] AUTH_METHOD (0/1/2),
- * [10] ONLINE_TIMEOUT (read-only)
+ * [10] ONLINE_TIMEOUT (seconds)
  */
 export interface PumpsecParams {
   maxDozeEn: boolean;      // [1]
@@ -1373,7 +1391,7 @@ export interface PumpsecParams {
   alarmTimer: string;      // [7] seconds
   authType: string;        // [8] hex bitmask (e.g. '1f', '3f')
   authMethod: string;      // [9] 0=Offline, 1=Online, 2=Online/Offline
-  onlineTimeout: string;   // [10] read-only
+  onlineTimeout: string;   // [10] seconds
 }
 
 export const EMPTY_PUMPSEC: PumpsecParams = {
@@ -1412,20 +1430,17 @@ export function buildPumpsecReadCmd(password: string): string {
   return buildCmd(password, 'PUMPSEC');
 }
 
-/** Write 9 fields (drop read-only onlineTimeout). */
+/** Write all 10 fields, including onlineTimeout. */
 export function buildPumpsecWriteCmd(password: string, p: PumpsecParams): string {
   const b = (v: boolean) => (v ? '1' : '0');
   return buildCmd(password, 'PUMPSEC', [
     b(p.maxDozeEn), b(p.lowLvlEn), p.lowLvlThresh, p.maxDozeThresh,
     b(p.alarmEn), p.alarmOutput, p.alarmTimer,
-    p.authType, p.authMethod,
+    p.authType, p.authMethod, p.onlineTimeout,
   ]);
 }
 
-/**
- * Parse `$PUMPSEC;f1;f2;f3;f4;f5;f6;f7;f8;f9;f10`.
- * 10 fields total; last (onlineTimeout) is read-only.
- */
+/** Parse `$PUMPSEC;f1;f2;f3;f4;f5;f6;f7;f8;f9;f10` — 10 fields total. */
 export function parsePumpsecResponse(raw: string): PumpsecParams | null {
   const t = raw.trim().replace(/^\$/, '');
   const parts = t.split(';');

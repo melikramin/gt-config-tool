@@ -20,6 +20,8 @@ import {
   parsePumpsecResponse,
   parseDateSyncResponse,
   TAGCFG_MODE_VALUES,
+  TAGCFG_BYTE_LEN_VALUES,
+  TAGCFG_ENDIAN_VALUES,
   PUMPSEC_AUTH_METHOD_VALUES,
   EMPTY_DATE_SYNC,
   type EmstopParams,
@@ -33,7 +35,7 @@ import type { Translations } from '../../i18n/types';
 // ---- Defaults ----
 
 const EMPTY_EMSTOP: EmstopParams = { enable: false, input: '3', level: false, operatorCheck: false };
-const EMPTY_TAGCFG: TagcfgParams = { mode: '0', mask: 'xxxxxxxxxxxx', saveSd: false };
+const EMPTY_TAGCFG: TagcfgParams = { mode: '0', mask: 'xxxxxxxxxxxx', saveSd: false, byteLen: '6', endian: '1' };
 const EMPTY_BYPASS: BypassParams = { enable: false, motion: false, minThreshold: '1.0' };
 const EMPTY_PUMPSEC: PumpsecParams = {
   maxDozeEn: false, lowLvlEn: false, lowLvlThresh: '0', maxDozeThresh: '0',
@@ -277,6 +279,8 @@ export const SecurityTab: FC = () => {
       if (isPasswordError(respD)) { await handlePasswordError(); return; }
       if (isErrorResponse(respD)) throw new Error(`DATE: ${respD.trim()}`);
       useSettingsStore.getState().setSecurityDateSync(dateSync);
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setSecuritySettings(emstop, tagcfg, bypass, pumpsec);
 
       setStatusMsg(t('sec.saveSuccess'));
     } catch (err) {
@@ -384,18 +388,18 @@ export const SecurityTab: FC = () => {
                   onChange={(v) => updateTagcfg('mode', v)}
                   options={TAGCFG_MODE_VALUES.map((v) => ({ value: v, label: t(`sec.tagcfgMode${v}` as keyof Translations) }))}
                   disabled={busy}
-                  className="w-52"
+                  className="w-36"
                 />
               </div>
-            </div>
-            <div className="flex items-center gap-4">
               <Checkbox
                 label={t('sec.tagcfgSaveSd')}
                 checked={tagcfg.saveSd}
                 onChange={(v) => updateTagcfg('saveSd', v)}
                 disabled={busy}
               />
-              {tagcfg.mode === '1' && (
+            </div>
+            {tagcfg.mode === '1' && (
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-zinc-400">{t('sec.tagcfgMask')}</span>
                   <TextInput
@@ -406,42 +410,33 @@ export const SecurityTab: FC = () => {
                     className="w-28 font-mono"
                   />
                 </div>
-              )}
-            </div>
-          </div>
-        </Panel>
-
-        {/* Panel 3: Bypass */}
-        <Panel title={t('sec.panelBypass')}>
-          <div className="space-y-2">
-            <div className="flex items-center gap-4">
-              <Checkbox
-                label={t('sec.bypassEnable')}
-                checked={bypass.enable}
-                onChange={(v) => updateBypass('enable', v)}
-                disabled={busy}
-              />
-              <Checkbox
-                label={t('sec.bypassMotion')}
-                checked={bypass.motion}
-                onChange={(v) => updateBypass('motion', v)}
-                disabled={busy || !bypass.enable}
-              />
-            </div>
+              </div>
+            )}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400">{t('sec.bypassThreshold')}</span>
-                <NumberInput
-                  value={bypass.minThreshold}
-                  onChange={(v) => updateBypass('minThreshold', v)}
-                  disabled={busy || !bypass.enable}
-                  step="0.1"
-                  className="w-20"
+                <span className="text-xs text-zinc-400">{t('sec.tagcfgByteLen')}</span>
+                <Select
+                  value={tagcfg.byteLen}
+                  onChange={(v) => updateTagcfg('byteLen', v)}
+                  options={TAGCFG_BYTE_LEN_VALUES.map((v) => ({ value: v, label: v }))}
+                  disabled={busy}
+                  className="w-16"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">{t('sec.tagcfgEndian')}</span>
+                <Select
+                  value={tagcfg.endian}
+                  onChange={(v) => updateTagcfg('endian', v)}
+                  options={TAGCFG_ENDIAN_VALUES.map((v) => ({ value: v, label: t(`sec.tagcfgEndian${v}` as keyof Translations) }))}
+                  disabled={busy}
+                  className="w-28"
                 />
               </div>
             </div>
           </div>
         </Panel>
+
       </div>
 
       {/* Panel 4: Dispensing & Alarm */}
@@ -547,7 +542,43 @@ export const SecurityTab: FC = () => {
           </div>
         </Panel>
 
-        {/* Panel 6: Time Synchronization */}
+      </div>
+
+      {/* Row 3: Bypass + Time Synchronization */}
+      <div className="flex flex-wrap gap-4">
+        {/* Panel 6: Bypass */}
+        <Panel title={t('sec.panelBypass')}>
+          <div className="space-y-2">
+            <div className="flex items-center gap-4">
+              <Checkbox
+                label={t('sec.bypassEnable')}
+                checked={bypass.enable}
+                onChange={(v) => updateBypass('enable', v)}
+                disabled={busy}
+              />
+              <Checkbox
+                label={t('sec.bypassMotion')}
+                checked={bypass.motion}
+                onChange={(v) => updateBypass('motion', v)}
+                disabled={busy || !bypass.enable}
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">{t('sec.bypassThreshold')}</span>
+                <NumberInput
+                  value={bypass.minThreshold}
+                  onChange={(v) => updateBypass('minThreshold', v)}
+                  disabled={busy || !bypass.enable}
+                  step="0.1"
+                  className="w-20"
+                />
+              </div>
+            </div>
+          </div>
+        </Panel>
+
+        {/* Panel 7: Time Synchronization */}
         <Panel title={t('sec.panelDateSync')}>
           <div className="space-y-2">
             <Checkbox

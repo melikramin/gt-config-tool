@@ -2,6 +2,7 @@ import { type FC, useState, useCallback, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
+import { useTagsStore } from '../../stores/tagsStore';
 import { useI18n } from '../../i18n';
 import {
   buildTagsCountCmd,
@@ -79,10 +80,8 @@ export const TagsTab: FC = () => {
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
-  const [tags, setTags] = useState<TagEntry[]>([]);
-  const [totalSlots, setTotalSlots] = useState(0);
-  const [, setUsedSlots] = useState(0);
-  const [loaded, setLoaded] = useState(false);
+  // Keys list lives in a store so it survives tab switches (the tab unmounts).
+  const { tags, setTags, totalSlots, setTotalSlots, setUsedSlots, loaded, setLoaded } = useTagsStore();
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
   const [saving, setSaving] = useState(false);

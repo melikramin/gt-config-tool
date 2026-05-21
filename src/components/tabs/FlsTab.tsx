@@ -509,6 +509,8 @@ export const FlsTab: FC = () => {
         if (isPasswordError(resp)) { await handlePasswordError(); return; }
         if (isErrorResponse(resp)) throw new Error(`LLS${i}: ${resp.trim()}`);
       }
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setFlsSettings(sensors);
       setStatusMsg(t('fls.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('fls.saveError')}: ${err instanceof Error ? err.message : String(err)}`);

@@ -420,6 +420,10 @@ export interface Translations {
   'sec.tagcfgMode2': string;
   'sec.tagcfgMask': string;
   'sec.tagcfgSaveSd': string;
+  'sec.tagcfgByteLen': string;
+  'sec.tagcfgEndian': string;
+  'sec.tagcfgEndian0': string;
+  'sec.tagcfgEndian1': string;
   'sec.panelBypass': string;
   'sec.bypassEnable': string;
   'sec.bypassMotion': string;

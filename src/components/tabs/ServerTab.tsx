@@ -9,7 +9,7 @@ import {
   buildServerReadCmd,
   buildServerWriteCmd,
 } from '../../lib/commands';
-import { parseApn, parseServer, type ApnData } from '../../lib/parsers';
+import { parseApn, parseServer, type ApnData, type ServerData } from '../../lib/parsers';
 
 // ---- Types ----
 
@@ -282,6 +282,21 @@ export const ServerTab: FC = () => {
         return;
       }
 
+      // Refresh the cache so the saved values survive a tab switch. The form
+      // only edits ip/port/channel/protocol — keep the rest of the last-read
+      // server record (or defaults) intact.
+      const baseSrv: ServerData = useSettingsStore.getState().serverData ?? {
+        serverProp: '0F', protoProp: '01', ip: '', port: '', login: '', pass: '',
+        timeout1: '10', timeout2: '0', timeout3: '120', timeout4: '30',
+        ipProto: '1', channel: '0', protocol: '1',
+      };
+      useSettingsStore.getState().setServerSettings(state.apn, {
+        ...baseSrv,
+        ip: state.server.ip,
+        port: state.server.port,
+        channel: state.server.channel,
+        protocol: state.server.protocol,
+      });
       setStatusMsg(t('server.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('server.saveError')}: ${err instanceof Error ? err.message : String(err)}`);

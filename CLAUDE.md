@@ -255,7 +255,7 @@ Pump format section: `PUMPFRMTn;VALUE_FMT;TOTAL_FMT;LIMIT_FMT;LIMIT_LEN` for pum
 3. **Bypass:** enable, motion, min threshold (float)
 4. **Pump Security (PUMPSEC):** low level, max dose, alarm, auth type bitmask, auth method
 
-Note: PUMPSEC read returns 10 fields, write sends 9 (last is read-only).
+Note: PUMPSEC uses all 10 fields for both read and write (last field is ONLINE_TIMEOUT in seconds).
 
 ### Tab 13: Printer
 

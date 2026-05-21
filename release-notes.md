@@ -1,15 +1,10 @@
-Release 2.1.4 — Camera cleanup, Keypad relabel, Time Synchronization
+Release 2.1.5 — Settings persistence fixes, online timeout write fix
+
+Bug fixes
+• Settings tabs — saved values no longer revert to a stale state. Previously, after changing and saving a setting, switching to another tab and back showed the old pre-save value until you pressed "Read". The in-app cache is now refreshed on every successful save (Server, Protocol, GPS, Inputs/Outputs, RS Interfaces, FLS, Pumps, Keypad, Security, Printer).
+• Tags/Keys tab — the keys list is no longer cleared when you switch to another tab and back. It now persists for the whole connection and is cleared on disconnect.
+• Security tab — "Online timeout" is now written to the device. The PUMPSEC write command previously omitted this field, so changes to it were silently lost.
 
 What's new
-• Security tab — new "Time Synchronization" panel: GPS, NTP and GSM time sync flags are now read on connect, included in Read All / Write All, and saved into templates.
-• Keypad tab (renamed from "Keyboard") — clearer labels:
-  – "Vehicle ID?" → "Request Driver?"
-  – "Driver tag type?" → "Driver card only!"
-  – "Enter driver code?" → "Prevent code entry"
-  – "Request dose?" → "Request preset?"
-  – "Request odometer?" → "Mileage", "Compare odometer" → "Compare mileage"
-  – Dependent checkboxes (Verify driver?, Driver card only!, Prevent code entry) are disabled when "Request Driver?" is off; "Compare mileage" is disabled when "Mileage" is off.
-• Security tab — "Online timeout, sec" is now editable when authentication method is Online or Online/Offline (was always disabled).
-
-Changes
-• Camera tab — Camera 2 slot removed. Only Camera 0 (RS232) and Camera 1 (RS485) are exposed; existing CAMERA2 entries in old templates are silently ignored on load.
+• Status tab — the pump panel now reflects the pump configuration: unconfigured pump slots (type = 0) are shown faded instead of being colored only by the FUEL status flag.
+• Security tab — tag authorization (TAGCFG) gains two new fields: "Key length (bytes)" and "Byte order" (big/little endian). Both are read on connect, written on save, and included in templates and Read All / Write All.

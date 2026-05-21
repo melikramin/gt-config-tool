@@ -165,6 +165,8 @@ export const KeyboardTab: FC = () => {
       if (isPasswordError(respX)) { await handlePasswordError(); return; }
       if (isErrorResponse(respX)) throw new Error(`UIMX: ${respX.trim()}`);
 
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setKeyboardSettings(uim, uimx);
       setStatusMsg(t('kbd.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('kbd.saveError')}: ${err instanceof Error ? err.message : String(err)}`);

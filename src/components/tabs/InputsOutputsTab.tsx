@@ -286,6 +286,8 @@ export const InputsOutputsTab: FC = () => {
       if (skipped.length > 0) {
         setStatusMsg(skipped.join(' '));
       } else {
+        // Refresh the cache so the saved values survive a tab switch.
+        useSettingsStore.getState().setInputsSettings(activeCount, inputs, enc1, enc2);
         setStatusMsg(t('io.saveSuccess'));
         setLastError('');
       }

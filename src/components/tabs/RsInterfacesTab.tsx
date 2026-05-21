@@ -171,6 +171,8 @@ export const RsInterfacesTab: FC = () => {
         }
         if (isErrorResponse(resp)) throw new Error(`${name}: ${resp.trim()}`);
       }
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setRsSettings(ports, available);
       setStatusMsg(t('rs.saveSuccess'));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

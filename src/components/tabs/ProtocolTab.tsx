@@ -243,6 +243,8 @@ export const ProtocolTab: FC = () => {
       setBuf20(next20);
       setBuf21(next21);
       setInitialEnabled(new Set(enabled));
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setProtocolSettings(next20, next21);
       setStatusMsg(t('proto.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('proto.saveError')}: ${err instanceof Error ? err.message : String(err)}`);

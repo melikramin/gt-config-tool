@@ -21,6 +21,7 @@ import { SystemTab } from './components/tabs/SystemTab';
 import { useConnectionStore } from './stores/connectionStore';
 import { useStatusStore } from './stores/statusStore';
 import { useDiagnosticsStore } from './stores/diagnosticsStore';
+import { useTagsStore } from './stores/tagsStore';
 import { useI18n } from './i18n';
 
 const TAB_COMPONENTS: Record<TabId, FC> = {
@@ -55,6 +56,8 @@ const App: FC = () => {
     if (!isConnected && !isSystemBusy) {
       setActiveTab('status');
       useDiagnosticsStore.getState().clearEnabledChannels();
+      // Drop the cached keys list — it belongs to the device we just left.
+      useTagsStore.getState().reset();
     }
   }, [isConnected, isSystemBusy]);
 

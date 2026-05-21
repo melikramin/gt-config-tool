@@ -279,6 +279,8 @@ export const GpsTab: FC = () => {
       if (isPasswordError(respT)) { await handlePasswordError(); return; }
       if (isErrorResponse(respT)) throw new Error(`TILT: ${respT.trim()}`);
 
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setGpsSettings(filter, msens, tilt);
       setStatusMsg(t('gps.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('gps.saveError')}: ${err instanceof Error ? err.message : String(err)}`);

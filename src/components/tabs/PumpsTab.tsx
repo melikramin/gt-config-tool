@@ -688,6 +688,8 @@ export const PumpsTab: FC = () => {
         if (isPasswordError(resp)) { await handlePasswordError(); return; }
         if (isErrorResponse(resp)) throw new Error(`PUMP${i}: ${resp.trim()}`);
       }
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setPumpsSettings(pumps);
       setStatusMsg(t('pumps.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('pumps.saveError')}: ${err instanceof Error ? err.message : String(err)}`);

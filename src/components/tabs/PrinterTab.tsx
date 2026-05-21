@@ -205,6 +205,8 @@ export const PrinterTab: FC = () => {
       if (isPasswordError(respW)) { await handlePasswordError(); return; }
       if (isErrorResponse(respW)) throw new Error(`PRNTW: ${respW.trim()}`);
 
+      // Refresh the cache so the saved values survive a tab switch.
+      useSettingsStore.getState().setPrinterSettings(printer, text);
       setStatusMsg(t('printer.saveSuccess'));
     } catch (err) {
       setStatusMsg(`${t('printer.saveError')}: ${err instanceof Error ? err.message : String(err)}`);
