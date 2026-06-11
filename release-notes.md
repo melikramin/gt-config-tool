@@ -1,10 +1,11 @@
-Release 2.1.5 — Settings persistence fixes, online timeout write fix
+Release 2.1.6 — Keys/Tags import & write fixes
 
 Bug fixes
-• Settings tabs — saved values no longer revert to a stale state. Previously, after changing and saving a setting, switching to another tab and back showed the old pre-save value until you pressed "Read". The in-app cache is now refreshed on every successful save (Server, Protocol, GPS, Inputs/Outputs, RS Interfaces, FLS, Pumps, Keypad, Security, Printer).
-• Tags/Keys tab — the keys list is no longer cleared when you switch to another tab and back. It now persists for the whole connection and is cleared on disconnect.
-• Security tab — "Online timeout" is now written to the device. The PUMPSEC write command previously omitted this field, so changes to it were silently lost.
+• Tags/Keys tab — XLSX import no longer drops keys. Previously only IDs that were exactly 12 hex characters were accepted, so a list of normal-length keys imported just a handful. IDs are now normalized to the device's 12-hex-char format: shorter IDs are left-padded with zeros, over-long IDs keep their rightmost 12 chars (left bytes dropped), and the header row is correctly skipped.
+• Tags/Keys tab — writing thousands of keys is now fast. The keys table was being fully repainted on every command, which made a large write crawl even though the device replies instantly. The table is now memoized so write speed is limited only by the device.
 
 What's new
-• Status tab — the pump panel now reflects the pump configuration: unconfigured pump slots (type = 0) are shown faded instead of being colored only by the FUEL status flag.
-• Security tab — tag authorization (TAGCFG) gains two new fields: "Key length (bytes)" and "Byte order" (big/little endian). Both are read on connect, written on save, and included in templates and Read All / Write All.
+• Tags/Keys tab — a "Loading…" indicator is shown on the Import button while a large file is being parsed.
+• Tags/Keys tab — tab switching is blocked while keys are being read or written, so the operation and its progress bar stay on screen instead of being lost.
+• Tags/Keys tab — when the list has more keys than the device has slots, only the first N (up to the device limit) are written instead of failing on overflow; the result message reports how many were written.
+• Tags/Keys tab — a "Stop" button can interrupt an in-progress write; the result message reports how many keys were written before stopping.

@@ -1,6 +1,7 @@
 import { type FC } from 'react';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
+import { useTagsStore } from '../../stores/tagsStore';
 
 export type TabId =
   | 'status'
@@ -51,25 +52,35 @@ interface SidebarProps {
 
 export const Sidebar: FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { t } = useI18n();
+  // While keys are being read/written, lock navigation so the operation and
+  // its progress bar stay on screen (TagsTab would otherwise unmount).
+  const busy = useTagsStore((s) => s.busy);
 
   return (
     <aside className="w-44 bg-zinc-900 border-r border-zinc-700 flex flex-col py-1 overflow-y-auto">
-      {TABS.map((tab, index) => (
-        <button
-          key={tab.id}
-          onClick={() => onTabChange(tab.id)}
-          className={`
-            px-3 py-2 text-left text-sm transition-colors
-            ${activeTab === tab.id
-              ? 'bg-blue-600 text-white'
-              : 'text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
-            }
-          `}
-        >
-          <span className="text-zinc-500 mr-2 text-xs">{index + 1}.</span>
-          {t(tab.labelKey)}
-        </button>
-      ))}
+      {TABS.map((tab, index) => {
+        const locked = busy && tab.id !== activeTab;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => { if (!locked) onTabChange(tab.id); }}
+            disabled={locked}
+            title={locked ? t('tags.busyLocked') : undefined}
+            className={`
+              px-3 py-2 text-left text-sm transition-colors
+              ${activeTab === tab.id
+                ? 'bg-blue-600 text-white'
+                : locked
+                  ? 'text-zinc-600 cursor-not-allowed'
+                  : 'text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+              }
+            `}
+          >
+            <span className="text-zinc-500 mr-2 text-xs">{index + 1}.</span>
+            {t(tab.labelKey)}
+          </button>
+        );
+      })}
     </aside>
   );
 };

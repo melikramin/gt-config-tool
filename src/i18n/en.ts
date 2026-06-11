@@ -513,6 +513,7 @@ export const en: Translations = {
   'tags.writeKeys': 'Write Keys',
   'tags.writing': 'Writing...',
   'tags.writeSuccess': 'Keys written successfully',
+  'tags.writeStopped': 'Writing stopped',
   'tags.writeError': 'Error writing keys',
   'tags.writeProgress': 'Writing keys',
   'tags.export': 'Export',
@@ -520,6 +521,9 @@ export const en: Translations = {
   'tags.importError': 'Import error',
   'tags.importSuccess': 'Imported successfully',
   'tags.importLimitExceeded': 'File contains more keys than device limit',
+  'tags.importing': 'Loading file…',
+  'tags.busyLocked': 'Wait until the keys operation finishes',
+  'tags.limitReached': 'device limit reached',
 
   // System tab
   'sys.panelActions': 'System Commands',

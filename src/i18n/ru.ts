@@ -513,6 +513,7 @@ export const ru: Translations = {
   'tags.writeKeys': 'Записать ключи',
   'tags.writing': 'Запись…',
   'tags.writeSuccess': 'Ключи записаны',
+  'tags.writeStopped': 'Запись остановлена',
   'tags.writeError': 'Ошибка записи ключей',
   'tags.writeProgress': 'Запись ключей',
   'tags.export': 'Экспорт',
@@ -520,6 +521,9 @@ export const ru: Translations = {
   'tags.importError': 'Ошибка импорта',
   'tags.importSuccess': 'Импортировано успешно',
   'tags.importLimitExceeded': 'В файле больше ключей, чем лимит устройства',
+  'tags.importing': 'Загрузка файла…',
+  'tags.busyLocked': 'Дождитесь завершения операции с ключами',
+  'tags.limitReached': 'достигнут лимит устройства',
 
   // System tab
   'sys.panelActions': 'Системные команды',

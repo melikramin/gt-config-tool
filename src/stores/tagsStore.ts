@@ -10,11 +10,16 @@ interface TagsState {
   totalSlots: number;
   usedSlots: number;
   loaded: boolean;
+  // True while a long read/write is running. Lives here (not in the component)
+  // so navigation can be blocked even though TagsTab itself stays mounted —
+  // see Sidebar, which disables tab switching while this is set.
+  busy: boolean;
 
   setTags: (tags: TagEntry[] | ((prev: TagEntry[]) => TagEntry[])) => void;
   setTotalSlots: (totalSlots: number) => void;
   setUsedSlots: (usedSlots: number) => void;
   setLoaded: (loaded: boolean) => void;
+  setBusy: (busy: boolean) => void;
   reset: () => void;
 }
 
@@ -23,6 +28,7 @@ const initialState = {
   totalSlots: 0,
   usedSlots: 0,
   loaded: false,
+  busy: false,
 };
 
 export const useTagsStore = create<TagsState>((set) => ({
@@ -33,5 +39,6 @@ export const useTagsStore = create<TagsState>((set) => ({
   setTotalSlots: (totalSlots) => set({ totalSlots }),
   setUsedSlots: (usedSlots) => set({ usedSlots }),
   setLoaded: (loaded) => set({ loaded }),
+  setBusy: (busy) => set({ busy }),
   reset: () => set(initialState),
 }));

@@ -1,4 +1,4 @@
-import { type FC, useState, useCallback, useRef, useEffect } from 'react';
+import { type FC, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
@@ -81,10 +81,11 @@ export const TagsTab: FC = () => {
   const { t } = useI18n();
 
   // Keys list lives in a store so it survives tab switches (the tab unmounts).
-  const { tags, setTags, totalSlots, setTotalSlots, setUsedSlots, loaded, setLoaded } = useTagsStore();
+  const { tags, setTags, totalSlots, setTotalSlots, setUsedSlots, loaded, setLoaded, setBusy } = useTagsStore();
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
@@ -111,12 +112,18 @@ export const TagsTab: FC = () => {
     cancelRef.current = true;
   }, []);
 
+  // Writing shares the same cancel flag — the loop checks it each iteration.
+  const stopWriting = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
+
   // ---- Read all keys ----
 
   const readKeys = useCallback(async () => {
     if (!isConnected) return;
     cancelRef.current = false;
     setLoading(true);
+    setBusy(true);
     setEditRow(null);
     setStatusMsg(t('tags.reading'));
     setProgress(0);
@@ -181,42 +188,62 @@ export const TagsTab: FC = () => {
       }
     } finally {
       setLoading(false);
+      setBusy(false);
       setProgress(0);
       setProgressTotal(0);
     }
-  }, [isConnected, password, handlePasswordError, t]);
+  }, [isConnected, password, handlePasswordError, t, setBusy]);
 
   // ---- Write all keys (skip empty FFFFFFFFFFFF) ----
 
   const writeKeys = useCallback(async () => {
     if (!isConnected || tags.length === 0) return;
+    cancelRef.current = false;
     setWriting(true);
+    setBusy(true);
     setEditRow(null);
     setStatusMsg(t('tags.writing'));
     setProgressLabel(t('tags.writeProgress'));
 
     const nonEmpty = tags.filter((tag) => tag.tagId !== TAG_EMPTY_ID);
-    setProgressTotal(nonEmpty.length);
+    // The device has a fixed number of slots. If the list is longer, write only
+    // as many as fit (first N) instead of failing on the overflow.
+    const capped = totalSlots > 0 && nonEmpty.length > totalSlots;
+    const toWrite = capped ? nonEmpty.slice(0, totalSlots) : nonEmpty;
+    setProgressTotal(toWrite.length);
     setProgress(0);
 
+    let written = 0;
     try {
-      for (let i = 0; i < nonEmpty.length; i++) {
+      for (let i = 0; i < toWrite.length; i++) {
+        if (cancelRef.current) break;
         setProgress(i + 1);
-        const tag = nonEmpty[i];
+        const tag = toWrite[i];
         const cmd = buildTagAddByIndexCmd(password, tag.index, tag.tagId, tag.limit, tag.param2, tag.pin);
         const resp = await window.serial.sendCommand(cmd);
+        if (cancelRef.current) break;
         if (isPasswordError(resp)) { await handlePasswordError(); return; }
         if (isErrorResponse(resp)) throw new Error(`TAG ${tag.index}: ${resp.trim()}`);
+        written++;
       }
-      setStatusMsg(t('tags.writeSuccess'));
+      if (cancelRef.current) {
+        setStatusMsg(`${t('tags.writeStopped')} (${written}/${toWrite.length})`);
+      } else {
+        setStatusMsg(
+          capped
+            ? `${t('tags.writeSuccess')} (${toWrite.length}/${nonEmpty.length}, ${t('tags.limitReached')}: ${totalSlots})`
+            : t('tags.writeSuccess'),
+        );
+      }
     } catch (err) {
       setStatusMsg(`${t('tags.writeError')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setWriting(false);
+      setBusy(false);
       setProgress(0);
       setProgressTotal(0);
     }
-  }, [isConnected, tags, password, handlePasswordError, t]);
+  }, [isConnected, tags, totalSlots, password, handlePasswordError, t, setBusy]);
 
   // ---- Save single tag (inline edit) ----
 
@@ -290,6 +317,14 @@ export const TagsTab: FC = () => {
   // ---- XLSX Import ----
 
   const onImportFile = useCallback(async (file: File) => {
+    setImporting(true);
+    setStatusMsg(t('tags.importing'));
+    // Parsing + building thousands of rows is synchronous and blocks the main
+    // thread, so the "loading" state would never paint. Yield two frames so
+    // the browser renders the spinner before we start the heavy work.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
@@ -301,8 +336,14 @@ export const TagsTab: FC = () => {
       const entries: TagEntry[] = [];
       for (const row of rows) {
         if (!Array.isArray(row) || row.length < 4) continue;
-        const tagId = String(row[1] ?? '').toUpperCase().replace(/[^0-9A-F]/g, '');
-        if (!/^[0-9A-F]{12}$/.test(tagId)) continue; // skip header or invalid
+        // The ID cell must be pure hex. Rejecting any non-hex char drops the
+        // "TagID" header row and stray garbage (instead of stripping letters
+        // out of it and accidentally keeping a bogus key).
+        const hex = String(row[1] ?? '').trim().toUpperCase();
+        if (!/^[0-9A-F]+$/.test(hex)) continue; // header or non-hex → skip
+        // Normalize to the device's 12 hex chars: left-pad short IDs, and for
+        // over-long ones keep the rightmost 12 (drop the left bytes).
+        const tagId = hex.length > 12 ? hex.slice(-12) : hex.padStart(12, '0');
         if (tagId === TAG_EMPTY_ID) continue;
 
         const limit = Number(row[2]) || 0;
@@ -326,18 +367,22 @@ export const TagsTab: FC = () => {
 
       if (entries.length === 0) throw new Error('No valid keys found in file');
 
-      // Check limit
-      if (totalSlots > 0 && entries.length > totalSlots) {
-        alert(`${t('tags.importLimitExceeded')}: ${entries.length} > ${totalSlots}`);
-        return;
-      }
+      // Import the whole list even if it's longer than the device limit; the
+      // write step caps it to the available slots. Just warn here.
+      const overLimit = totalSlots > 0 && entries.length > totalSlots;
 
       setTags(entries);
       setUsedSlots(entries.length);
       setLoaded(true);
-      setStatusMsg(`${t('tags.importSuccess')} (${entries.length})`);
+      setStatusMsg(
+        overLimit
+          ? `${t('tags.importSuccess')} (${entries.length}) — ${t('tags.importLimitExceeded')}: ${totalSlots}`
+          : `${t('tags.importSuccess')} (${entries.length})`,
+      );
     } catch (err) {
       setStatusMsg(`${t('tags.importError')}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setImporting(false);
     }
   }, [totalSlots, t]);
 
@@ -347,7 +392,146 @@ export const TagsTab: FC = () => {
     e.target.value = '';
   }, [onImportFile]);
 
-  const busy = loading || writing || saving;
+  const busy = loading || writing || saving || importing;
+
+  // Filter out empty tags for display. Memoized so the reference is stable
+  // across progress ticks — otherwise the table below would re-render on every
+  // setProgress during a write of thousands of keys.
+  const visibleTags = useMemo(
+    () => tags.filter((tag) => tag.tagId !== TAG_EMPTY_ID),
+    [tags],
+  );
+
+  // The keys table can hold thousands of rows. Build it as a memoized element
+  // that depends only on what actually changes its content — NOT on progress —
+  // so a long write doesn't repaint the whole table on each command.
+  const tableElement = useMemo(() => {
+    const limitLabel = (limit: number): string => {
+      if (limit === -1) return t('tags.exhausted');
+      if (limit === 0) return t('tags.unlimited');
+      return String(limit);
+    };
+    return (
+      <div className="flex-[3] min-h-0 overflow-auto border border-zinc-700 rounded">
+        {visibleTags.length === 0 ? (
+          <p className="text-zinc-500 p-4 text-sm">{t('tags.dbEmpty')}</p>
+        ) : (
+          <table className="w-full text-xs text-zinc-300">
+            <thead className="bg-zinc-800 sticky top-0 z-10">
+              <tr>
+                <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700 w-10">{t('tags.colIndex')}</th>
+                <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700">{t('tags.colTagId')}</th>
+                <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700 w-20">{t('tags.colLimit')}</th>
+                <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700 w-16">{t('tags.colPin')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel1')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel2')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel3')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel4')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-20">{t('tags.colOperator')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-20">{t('tags.colDriver')}</th>
+                <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-24">{t('tags.colActions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleTags.map((tag) => {
+                const editing = editRow?.index === tag.index;
+                const flags = decodeTagParam2(tag.param2);
+
+                if (editing) {
+                  return (
+                    <tr key={tag.index} className="bg-zinc-800/60">
+                      <td className="px-2 py-1 border-b border-zinc-700/50">{tag.index}</td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50">
+                        <input
+                          type="text"
+                          value={editRow.tagId}
+                          maxLength={12}
+                          onChange={(e) => setEditRow({ ...editRow, tagId: e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 12) })}
+                          className="bg-zinc-700 border border-zinc-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 w-28 font-mono focus:border-blue-500 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50">
+                        <input
+                          type="number"
+                          value={editRow.limit}
+                          min={-1}
+                          max={9999}
+                          onChange={(e) => setEditRow({ ...editRow, limit: e.target.value })}
+                          className="bg-zinc-700 border border-zinc-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 w-16 focus:border-blue-500 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50">
+                        <input
+                          type="number"
+                          value={editRow.pin}
+                          min={0}
+                          max={9999}
+                          onChange={(e) => setEditRow({ ...editRow, pin: e.target.value })}
+                          className="bg-zinc-700 border border-zinc-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 w-14 focus:border-blue-500 focus:outline-none"
+                        />
+                      </td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel1} onChange={(v) => setEditRow({ ...editRow, fuel1: v })} /></td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel2} onChange={(v) => setEditRow({ ...editRow, fuel2: v })} /></td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel3} onChange={(v) => setEditRow({ ...editRow, fuel3: v })} /></td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel4} onChange={(v) => setEditRow({ ...editRow, fuel4: v })} /></td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.operator} onChange={(v) => setEditRow({ ...editRow, operator: v })} /></td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.driver} onChange={(v) => setEditRow({ ...editRow, driver: v })} /></td>
+                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center">
+                        <div className="flex gap-1 justify-center">
+                          <button
+                            onClick={() => saveTag(editRow)}
+                            disabled={saving}
+                            className="px-2 py-0.5 rounded text-[10px] bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
+                          >
+                            {t('tags.save')}
+                          </button>
+                          <button
+                            onClick={() => setEditRow(null)}
+                            disabled={saving}
+                            className="px-2 py-0.5 rounded text-[10px] bg-zinc-600 hover:bg-zinc-500 text-white disabled:opacity-50"
+                          >
+                            {t('tags.cancel')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return (
+                  <tr key={tag.index} className="hover:bg-zinc-800/40">
+                    <td className="px-2 py-1 border-b border-zinc-700/50">{tag.index}</td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 font-mono">{tag.tagId}</td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50">
+                      <span className={tag.limit === -1 ? 'text-red-400' : tag.limit === 0 ? 'text-green-400' : ''}>
+                        {limitLabel(tag.limit)}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50">{tag.pin}</td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel1} onChange={() => {}} disabled /></td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel2} onChange={() => {}} disabled /></td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel3} onChange={() => {}} disabled /></td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel4} onChange={() => {}} disabled /></td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.operator} onChange={() => {}} disabled /></td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.driver} onChange={() => {}} disabled /></td>
+                    <td className="px-2 py-1 border-b border-zinc-700/50 text-center">
+                      <button
+                        onClick={() => setEditRow(tagToEdit(tag))}
+                        disabled={busy}
+                        className="px-2 py-0.5 rounded text-[10px] bg-zinc-600 hover:bg-zinc-500 text-white disabled:opacity-50"
+                      >
+                        {t('tags.edit')}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }, [visibleTags, editRow, saving, busy, saveTag, t]);
 
   if (!isConnected) {
     return (
@@ -357,15 +541,6 @@ export const TagsTab: FC = () => {
       </div>
     );
   }
-
-  // Filter out empty tags for display
-  const visibleTags = tags.filter((tag) => tag.tagId !== TAG_EMPTY_ID);
-
-  const limitLabel = (limit: number): string => {
-    if (limit === -1) return t('tags.exhausted');
-    if (limit === 0) return t('tags.unlimited');
-    return String(limit);
-  };
 
   return (
     <div className="p-4 flex flex-col gap-3 h-full">
@@ -390,13 +565,22 @@ export const TagsTab: FC = () => {
           </button>
         )}
 
-        <button
-          onClick={writeKeys}
-          disabled={busy || visibleTags.length === 0}
-          className="px-3 py-1 rounded text-xs font-medium bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
-        >
-          {writing ? t('tags.writing') : t('tags.writeKeys')}
-        </button>
+        {writing ? (
+          <button
+            onClick={stopWriting}
+            className="px-3 py-1 rounded text-xs font-medium bg-red-600 hover:bg-red-500 text-white"
+          >
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={writeKeys}
+            disabled={busy || visibleTags.length === 0}
+            className="px-3 py-1 rounded text-xs font-medium bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
+          >
+            {t('tags.writeKeys')}
+          </button>
+        )}
 
         <button
           onClick={exportXlsx}
@@ -409,9 +593,15 @@ export const TagsTab: FC = () => {
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={busy}
-          className="px-3 py-1 rounded text-xs font-medium bg-zinc-600 hover:bg-zinc-500 text-white disabled:opacity-50"
+          className="px-3 py-1 rounded text-xs font-medium bg-zinc-600 hover:bg-zinc-500 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
         >
-          {t('tags.import')}
+          {importing && (
+            <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+            </svg>
+          )}
+          {importing ? t('tags.importing') : t('tags.import')}
         </button>
         <input
           ref={fileInputRef}
@@ -449,127 +639,8 @@ export const TagsTab: FC = () => {
         <p className="text-zinc-500 mt-2">{t('tags.noData')}</p>
       )}
 
-      {/* Table — only non-empty keys */}
-      {loaded && (
-        <div className="flex-[3] min-h-0 overflow-auto border border-zinc-700 rounded">
-          {visibleTags.length === 0 ? (
-            <p className="text-zinc-500 p-4 text-sm">{t('tags.dbEmpty')}</p>
-          ) : (
-            <table className="w-full text-xs text-zinc-300">
-              <thead className="bg-zinc-800 sticky top-0 z-10">
-                <tr>
-                  <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700 w-10">{t('tags.colIndex')}</th>
-                  <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700">{t('tags.colTagId')}</th>
-                  <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700 w-20">{t('tags.colLimit')}</th>
-                  <th className="px-2 py-1.5 text-left font-medium border-b border-zinc-700 w-16">{t('tags.colPin')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel1')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel2')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel3')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-14">{t('tags.colFuel4')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-20">{t('tags.colOperator')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-20">{t('tags.colDriver')}</th>
-                  <th className="px-2 py-1.5 text-center font-medium border-b border-zinc-700 w-24">{t('tags.colActions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleTags.map((tag) => {
-                  const editing = editRow?.index === tag.index;
-                  const flags = decodeTagParam2(tag.param2);
-
-                  if (editing) {
-                    return (
-                      <tr key={tag.index} className="bg-zinc-800/60">
-                        <td className="px-2 py-1 border-b border-zinc-700/50">{tag.index}</td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50">
-                          <input
-                            type="text"
-                            value={editRow.tagId}
-                            maxLength={12}
-                            onChange={(e) => setEditRow({ ...editRow, tagId: e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 12) })}
-                            className="bg-zinc-700 border border-zinc-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 w-28 font-mono focus:border-blue-500 focus:outline-none"
-                          />
-                        </td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50">
-                          <input
-                            type="number"
-                            value={editRow.limit}
-                            min={-1}
-                            max={9999}
-                            onChange={(e) => setEditRow({ ...editRow, limit: e.target.value })}
-                            className="bg-zinc-700 border border-zinc-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 w-16 focus:border-blue-500 focus:outline-none"
-                          />
-                        </td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50">
-                          <input
-                            type="number"
-                            value={editRow.pin}
-                            min={0}
-                            max={9999}
-                            onChange={(e) => setEditRow({ ...editRow, pin: e.target.value })}
-                            className="bg-zinc-700 border border-zinc-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 w-14 focus:border-blue-500 focus:outline-none"
-                          />
-                        </td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel1} onChange={(v) => setEditRow({ ...editRow, fuel1: v })} /></td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel2} onChange={(v) => setEditRow({ ...editRow, fuel2: v })} /></td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel3} onChange={(v) => setEditRow({ ...editRow, fuel3: v })} /></td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.fuel4} onChange={(v) => setEditRow({ ...editRow, fuel4: v })} /></td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.operator} onChange={(v) => setEditRow({ ...editRow, operator: v })} /></td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={editRow.driver} onChange={(v) => setEditRow({ ...editRow, driver: v })} /></td>
-                        <td className="px-2 py-1 border-b border-zinc-700/50 text-center">
-                          <div className="flex gap-1 justify-center">
-                            <button
-                              onClick={() => saveTag(editRow)}
-                              disabled={saving}
-                              className="px-2 py-0.5 rounded text-[10px] bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
-                            >
-                              {t('tags.save')}
-                            </button>
-                            <button
-                              onClick={() => setEditRow(null)}
-                              disabled={saving}
-                              className="px-2 py-0.5 rounded text-[10px] bg-zinc-600 hover:bg-zinc-500 text-white disabled:opacity-50"
-                            >
-                              {t('tags.cancel')}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  return (
-                    <tr key={tag.index} className="hover:bg-zinc-800/40">
-                      <td className="px-2 py-1 border-b border-zinc-700/50">{tag.index}</td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 font-mono">{tag.tagId}</td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50">
-                        <span className={tag.limit === -1 ? 'text-red-400' : tag.limit === 0 ? 'text-green-400' : ''}>
-                          {limitLabel(tag.limit)}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50">{tag.pin}</td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel1} onChange={() => {}} disabled /></td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel2} onChange={() => {}} disabled /></td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel3} onChange={() => {}} disabled /></td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.fuel4} onChange={() => {}} disabled /></td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.operator} onChange={() => {}} disabled /></td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center"><Cb checked={flags.driver} onChange={() => {}} disabled /></td>
-                      <td className="px-2 py-1 border-b border-zinc-700/50 text-center">
-                        <button
-                          onClick={() => setEditRow(tagToEdit(tag))}
-                          disabled={busy}
-                          className="px-2 py-0.5 rounded text-[10px] bg-zinc-600 hover:bg-zinc-500 text-white disabled:opacity-50"
-                        >
-                          {t('tags.edit')}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+      {/* Table — only non-empty keys (memoized; see tableElement above) */}
+      {loaded && tableElement}
 
     </div>
   );

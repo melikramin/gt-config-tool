@@ -514,6 +514,7 @@ export interface Translations {
   'tags.writeKeys': string;
   'tags.writing': string;
   'tags.writeSuccess': string;
+  'tags.writeStopped': string;
   'tags.writeError': string;
   'tags.writeProgress': string;
   'tags.export': string;
@@ -521,6 +522,9 @@ export interface Translations {
   'tags.importError': string;
   'tags.importSuccess': string;
   'tags.importLimitExceeded': string;
+  'tags.importing': string;
+  'tags.busyLocked': string;
+  'tags.limitReached': string;
 
   // System tab
   'sys.panelActions': string;
