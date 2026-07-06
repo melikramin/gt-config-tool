@@ -10,7 +10,9 @@
     "build": "tsc -p tsconfig.node.json && vite build && electron-builder",
     "build:electron": "tsc -p tsconfig.node.json",
     "release": "tsc -p tsconfig.node.json && vite build && electron-builder --publish always",
-    "release:draft": "tsc -p tsconfig.node.json && vite build && electron-builder --publish onTagOrDraft"
+    "release:draft": "tsc -p tsconfig.node.json && vite build && electron-builder --publish onTagOrDraft",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "geotek",
@@ -41,6 +43,7 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^8.0.3",
+    "vitest": "^3.2.4",
     "wait-on": "^9.0.4"
   }
 }
