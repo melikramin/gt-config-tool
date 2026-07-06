@@ -26,17 +26,28 @@ body {
    `var(--color-zinc-XXX)`, so overriding the variables here re-themes the
    whole app without touching any component. */
 [data-theme="light"] {
-  --color-zinc-50: #09090b;
-  --color-zinc-100: #18181b;
-  --color-zinc-200: #27272a;
-  --color-zinc-300: #3f3f46;
-  --color-zinc-400: #52525b;
-  --color-zinc-500: #71717a;
-  --color-zinc-600: #a1a1aa;
-  --color-zinc-700: #d4d4d8;
-  --color-zinc-800: #e4e4e7;
-  --color-zinc-900: #f4f4f5;
-  --color-zinc-950: #ffffff;
+  /* Light theme. NOT a mechanical inversion of the dark zinc scale — that made
+     input fields a DARKER gray than their panels (dark mode's "raised = lighter"
+     logic flipped), which reads as muddy gray-on-gray. Instead each token is
+     mapped by how it's actually used, to match a crisp native light UI:
+       • white page + white input fields (the brightest surfaces)
+       • light-gray panels that FRAME the white fields
+       • clearly visible gray borders so every field has a defined edge
+       • near-black text; muted text still ≥5.5:1 on every surface (sunlight-safe)
+     Note this is intentionally non-monotonic: zinc-800 (inputs) is white, brighter
+     than zinc-900 (gray panels), so fields pop instead of sinking. zinc-950 stays
+     white so the Diagnostics terminal and FLS chart read as bright white. */
+  --color-zinc-50: #08090b;  /* max-emphasis text */
+  --color-zinc-100: #0f1115; /* primary text (app root text-zinc-100) — ~17:1 on white */
+  --color-zinc-200: #191c21; /* body / field values */
+  --color-zinc-300: #292c33; /* headings */
+  --color-zinc-400: #3b3f47; /* secondary text */
+  --color-zinc-500: #545862; /* muted labels & placeholders — ≥5.5:1 on every surface */
+  --color-zinc-600: #6f747f; /* input & modal borders — clearly visible, ~3.6:1 on white */
+  --color-zinc-700: #ced1d7; /* dividers, secondary-button bg */
+  --color-zinc-800: #ffffff; /* input fields, modals, active tab, value boxes — white */
+  --color-zinc-900: #e8eaee; /* panels / cards — light gray, frames the white fields */
+  --color-zinc-950: #ffffff; /* page background, terminal, chart — pure white */
   --terminal-fg: #166534; /* green-800 — readable on white */
 
   /* Light theme: darker, saturated hint shades stay visible on the white
@@ -66,13 +77,13 @@ body {
 }
 
 [data-theme="light"] ::-webkit-scrollbar-track {
-  background: #f4f4f5;
+  background: #eaebee;
 }
 
 [data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: #b0b4bb;
 }
 
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: #7c828c;
 }
