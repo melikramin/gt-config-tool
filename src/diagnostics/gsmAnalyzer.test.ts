@@ -156,6 +156,70 @@ describe('gsmAnalyzer — §4 контекстные правила', () => {
   });
 });
 
+describe('gsmAnalyzer — GPS / NMEA (одна подсказка на блок)', () => {
+  const NO_FIX = [
+    '$GNGGA,174257.000,,,,,0,0,,,M,,M,,*54',
+    '$GNRMC,174257.000,V,,,,,9.72,196.26,201106,,,N*53',
+  ].join('\n');
+  const FIX = [
+    '$GNGGA,174951.000,5539.9466,N,03734.5008,E,1,5,1.31,137.7,M,14.5,M,,*40',
+    '$GNRMC,174951.000,A,5539.9466,N,03734.5008,E,0.00,186.69,201106,,,A*72',
+  ].join('\n');
+
+  // Подсказка привязана к строке RMC (замыкает блок) — на GGA её нет.
+  function blockHint(log: string) {
+    const lines = analyzeGsmLog(log, 'gps');
+    expect(lines[0].hints).toEqual([]);          // GGA — без подсказки
+    expect(lines[1].hints).toHaveLength(1);       // ровно ОДНА на блок, на RMC
+    return lines[1].hints[0];
+  }
+
+  it('нет фикса (fixQuality=0 / RMC=V) → warn', () => {
+    const h = blockHint(NO_FIX);
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toBe('Нет GPS-фикса (спутников в решении: 0)');
+    expect(h.en).toBe('No GPS fix (satellites used: 0)');
+  });
+
+  it('есть фикс → ok, координаты/спутники/точность', () => {
+    const h = blockHint(FIX);
+    expect(h.severity).toBe('ok');
+    expect(h.ru).toContain('55.6658, 37.5750');
+    expect(h.ru).toContain('спутников: 5');
+    expect(h.ru).toContain('HDOP 1.31');
+    // HDOP 1.31 < 2 → по порогам «отличная/excellent» (не «хорошая»).
+    expect(h.ru).toContain('отличная');
+    expect(h.en).toContain('55.6658, 37.5750');
+    expect(h.en).toContain('5 sats');
+    expect(h.en).toContain('excellent');
+  });
+
+  it('перевод координат S/W даёт минус', () => {
+    const log = [
+      '$GNGGA,120000.000,5539.9466,S,03734.5008,W,1,5,1.31,100,M,,M,,*00',
+      '$GNRMC,120000.000,A,5539.9466,S,03734.5008,W,0,0,201106,,,A*00',
+    ].join('\n');
+    const h = analyzeGsmLog(log, 'gps')[1].hints[0];
+    expect(h.ru).toContain('-55.6658, -37.5750');
+  });
+
+  it("GPS-подсказки НЕ появляются в режимах 'gsm' и 'off'", () => {
+    for (const mode of ['gsm', 'off'] as const) {
+      const lines = analyzeGsmLog(FIX, mode);
+      expect(lines.every((l) => l.hints.length === 0)).toBe(true);
+    }
+  });
+
+  it("GPS-подсказки появляются в режимах 'gps' и 'all'", () => {
+    for (const mode of ['gps', 'all'] as const) {
+      const lines = analyzeGsmLog(FIX, mode);
+      const withHint = lines.filter((l) => l.hints.length > 0);
+      expect(withHint).toHaveLength(1);
+      expect(withHint[0].hints[0].severity).toBe('ok');
+    }
+  });
+});
+
 describe('gsmAnalyzer — режимы и языки', () => {
   it("mode==='off' не даёт подсказок", () => {
     const lines = analyzeGsmLog('+CREG: 0,1', 'off');

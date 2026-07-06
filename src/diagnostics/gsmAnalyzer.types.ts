@@ -21,6 +21,18 @@ export interface GsmContext {
   loginSentPending?: number; // сколько #L# отправлено без ответного #AL#1
   regSearchStreak?: number;  // подряд идущих CREG: 0,2
   awaitingQistate?: boolean; // был запрос AT+QISTATE, ждём +QISTATE или пустой OK
+
+  // Накопленные поля текущего NMEA-блока (из $__GGA), пока не пришёл $__RMC.
+  gpsBlock?: GpsBlock;
+}
+
+// Поля одного NMEA-блока (тика), нужные для подсказки. Копятся из $__GGA.
+export interface GpsBlock {
+  fixQuality: number;      // GGA поле 6: 0 нет фикса, 1 GPS, 2 DGPS
+  numSats: number;         // GGA поле 7: спутников в решении
+  hdop: string;            // GGA поле 8: точность (сырой текст для показа)
+  lat: number | null;      // десятичные градусы (S → минус)
+  lon: number | null;      // десятичные градусы (W → минус)
 }
 
 export interface AnalyzedLine {

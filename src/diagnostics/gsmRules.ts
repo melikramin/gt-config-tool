@@ -1,4 +1,4 @@
-import type { Hint, GsmContext } from './gsmAnalyzer.types';
+import type { Hint, GsmContext, GpsBlock } from './gsmAnalyzer.types';
 
 export interface Rule {
   id: string;
@@ -403,5 +403,95 @@ export const CONTEXT_RULES: Rule[] = [
   },
 ];
 
-// GPS-правила — заглушка на будущее (§1.1: 'gps' может возвращать null).
-export const GPS_RULES: Rule[] = [];
+// ===========================================================================
+// GPS / GNSS (NMEA). Анализируем только $__GGA и $__RMC и даём ОДНУ подсказку
+// на блок (тик), а не на каждую строку. GGA идёт в начале блока — копим его
+// поля в ctx.gpsBlock; $__RMC завершает блок — на нём и рождается подсказка,
+// после чего блок сбрасываем. Прочие NMEA (GSV/GSA/VTG) игнорируем.
+// ===========================================================================
+
+// ddmm.mmmm (+ полушарие) → десятичные градусы. Округление до 4 знаков — на выводе.
+function nmeaToDecimal(value?: string, hemi?: string): number | null {
+  if (!value) return null;
+  const v = parseFloat(value);
+  if (Number.isNaN(v)) return null;
+  const deg = Math.floor(v / 100);
+  const dec = deg + (v - deg * 100) / 60;
+  return hemi === 'S' || hemi === 'W' ? -dec : dec;
+}
+
+function toInt(s?: string): number {
+  const n = parseInt((s ?? '').trim(), 10);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+// Разбор строки $__GGA в поля блока (индексы полей от токена $__GGA).
+function parseGga(line: string): GpsBlock {
+  const p = line.split(',');
+  return {
+    fixQuality: toInt(p[6]),
+    numSats: toInt(p[7]),
+    hdop: (p[8] ?? '').trim(),
+    lat: nmeaToDecimal(p[2], p[3]),
+    lon: nmeaToDecimal(p[4], p[5]),
+  };
+}
+
+// Одна подсказка на блок: накопленная GGA + статус RMC (A/V).
+function buildGpsHint(gga: GpsBlock | undefined, rmcStatus: string): Hint {
+  const numSats = gga?.numSats ?? 0;
+  const fixQuality = gga?.fixQuality ?? 0;
+  const hasFix = fixQuality >= 1 && rmcStatus === 'A';
+
+  if (!hasFix) {
+    return {
+      severity: 'warn',
+      en: `No GPS fix (satellites used: ${numSats})`,
+      ru: `Нет GPS-фикса (спутников в решении: ${numSats})`,
+    };
+  }
+
+  // Точность по HDOP: <2 отлично, 2..5 хорошо, >5 плохо.
+  const hd = parseFloat(gga?.hdop ?? '');
+  let qEn: string, qRu: string;
+  if (Number.isNaN(hd)) { qEn = 'unknown'; qRu = 'неизвестная'; }
+  else if (hd < 2) { qEn = 'excellent'; qRu = 'отличная'; }
+  else if (hd <= 5) { qEn = 'good'; qRu = 'хорошая'; }
+  else { qEn = 'poor'; qRu = 'плохая'; }
+
+  const lat = gga?.lat != null ? gga.lat.toFixed(4) : '—';
+  const lon = gga?.lon != null ? gga.lon.toFixed(4) : '—';
+  const hdop = gga?.hdop ?? '';
+  return {
+    severity: 'ok',
+    en: `GPS fix: ${lat}, ${lon} · ${numSats} sats · accuracy ${qEn} (HDOP ${hdop})`,
+    ru: `GPS-фикс есть: ${lat}, ${lon} · спутников: ${numSats} · точность: ${qRu} (HDOP ${hdop})`,
+  };
+}
+
+// Хвост строки от токена NMEA (отрезаем возможный префикс лога — напр. таймстамп).
+function nmeaTail(m: RegExpMatchArray): string {
+  return (m.input ?? '').slice(m.index ?? 0);
+}
+
+export const GPS_RULES: Rule[] = [
+  {
+    // $GNGGA / $GPGGA / $GLGGA — начало блока: копим поля, подсказку НЕ даём.
+    id: 'nmea-gga',
+    test: /\$[A-Z]{2}GGA,/,
+    updateContext: (m, ctx) => { ctx.gpsBlock = parseGga(nmeaTail(m)); },
+  },
+  {
+    // $GNRMC / $GPRMC — конец блока: одна подсказка, затем сброс блока.
+    // Сброс делаем в build (он выполняется после updateContext-прохода), чтобы
+    // подсказка успела прочитать накопленную GGA.
+    id: 'nmea-rmc',
+    test: /\$[A-Z]{2}RMC,/,
+    build: (m, ctx) => {
+      const status = (nmeaTail(m).split(',')[2] ?? '').trim().toUpperCase();
+      const hint = buildGpsHint(ctx.gpsBlock, status);
+      ctx.gpsBlock = undefined;
+      return hint;
+    },
+  },
+];
