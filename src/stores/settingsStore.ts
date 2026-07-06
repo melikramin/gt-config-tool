@@ -27,6 +27,13 @@ interface SettingsState {
   isReadingAll: boolean;
   /** True while writeAllSettings is running */
   isWritingAll: boolean;
+  /**
+   * True when the Protocol values in the store came from a loaded template and
+   * have not yet been written to the device — the Protocol tab shows them as
+   * unsaved edits (Save stays enabled). Cleared automatically whenever protocol
+   * settings are (re)read from the device via setProtocolSettings.
+   */
+  protoDirty: boolean;
 
   // Server tab
   serverApn: ApnData | null;
@@ -82,6 +89,8 @@ interface SettingsState {
   // Actions
   setIsReadingAll: (v: boolean) => void;
   setIsWritingAll: (v: boolean) => void;
+  /** Signal that a template file was just loaded into the store. */
+  notifyTemplateLoaded: () => void;
   setServerSettings: (apn: ApnData, server: ServerData) => void;
   setProtocolSettings: (buf20: Uint8Array, buf21: Uint8Array) => void;
   setWifiSettings: (networks: WifiNetworkData[]) => void;
@@ -99,9 +108,10 @@ interface SettingsState {
   clearAll: () => void;
 }
 
-const INITIAL: Omit<SettingsState, 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setSecurityDateSync' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
+const INITIAL: Omit<SettingsState, 'notifyTemplateLoaded' | 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setSecurityDateSync' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
   isReadingAll: false,
   isWritingAll: false,
+  protoDirty: false,
   serverApn: null,
   serverData: null,
   protoBuf20: null,
@@ -135,8 +145,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   ...INITIAL,
   setIsReadingAll: (isReadingAll) => set({ isReadingAll }),
   setIsWritingAll: (isWritingAll) => set({ isWritingAll }),
+  notifyTemplateLoaded: () => set({ protoDirty: true }),
   setServerSettings: (serverApn, serverData) => set({ serverApn, serverData }),
-  setProtocolSettings: (protoBuf20, protoBuf21) => set({ protoBuf20, protoBuf21 }),
+  // Setting protocol buffers means they now reflect the device (a read/save),
+  // so any pending template-loaded state is no longer "unsaved". The template
+  // loader re-sets protoDirty afterwards via notifyTemplateLoaded().
+  setProtocolSettings: (protoBuf20, protoBuf21) => set({ protoBuf20, protoBuf21, protoDirty: false }),
   setWifiSettings: (wifiNetworks) => set({ wifiNetworks }),
   setGpsSettings: (gpsFilter, gpsMsens, gpsTilt) => set({ gpsFilter, gpsMsens, gpsTilt }),
   setInputsSettings: (inputCount, inputs, encoder1, encoder2) => set({ inputCount, inputs, encoder1, encoder2 }),

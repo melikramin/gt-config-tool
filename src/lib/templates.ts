@@ -652,5 +652,9 @@ export function loadTemplateFromText(text: string): number {
     settings.setCameras(arr);
   }
 
+  // Signal tabs that these values came from a template (not a device read),
+  // so they can present the loaded settings as unsaved/dirty edits.
+  if (parsed > 0) settings.notifyTemplateLoaded();
+
   return parsed;
 }

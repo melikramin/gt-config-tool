@@ -115,6 +115,9 @@ export const ProtocolTab: FC = () => {
 
   const storeBuf20 = useSettingsStore((s) => s.protoBuf20);
   const storeBuf21 = useSettingsStore((s) => s.protoBuf21);
+  // True when the store holds template-loaded protocol values not yet written
+  // to the device — keeps Save enabled even though checkboxes match the buffers.
+  const protoDirtyStore = useSettingsStore((s) => s.protoDirty);
 
   const [enabled, setEnabled] = useState<Set<number>>(() => {
     if (storeBuf20 && storeBuf21) {
@@ -274,10 +277,13 @@ export const ProtocolTab: FC = () => {
   const busy = loading || saving;
 
   const dirty = useMemo(() => {
+    // Template-loaded values are unsaved by definition, even if the checkboxes
+    // happen to match the buffers they were derived from.
+    if (protoDirtyStore) return true;
     if (enabled.size !== initialEnabled.size) return true;
     for (const id of enabled) if (!initialEnabled.has(id)) return true;
     return false;
-  }, [enabled, initialEnabled]);
+  }, [protoDirtyStore, enabled, initialEnabled]);
 
   // ---- Render ----
   if (!isConnected) {
