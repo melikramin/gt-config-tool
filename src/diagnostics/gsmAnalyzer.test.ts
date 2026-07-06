@@ -64,6 +64,65 @@ describe('gsmAnalyzer — §3 строка → подсказка', () => {
   });
 });
 
+describe('gsmAnalyzer — новые правила (WCDMA / CPIN NOT READY / denied)', () => {
+  it('+QCSQ: "WCDMA",92,-91,-9 → info (RSCP «хорошо», Ec/No норм), с RSCP/Ec/No в тексте', () => {
+    const h = firstHint('+QCSQ: "WCDMA",92,-91,-9');
+    expect(h.severity).toBe('info');
+    expect(h.ru).toContain('RSCP -91');
+    expect(h.ru).toContain('Ec/No -9');
+    expect(h.en).toContain('RSCP -91');
+    expect(h.en).toContain('Ec/No -9');
+  });
+
+  it('+QCSQ: "WCDMA",92,-102,-15 → warn (RSCP < -100 и Ec/No < -13)', () => {
+    const h = firstHint('+QCSQ: "WCDMA",92,-102,-15');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toContain('RSCP -102');
+    expect(h.ru).toContain('Ec/No -15');
+  });
+
+  it('+CPIN: NOT READY → warn, SIM не готова', () => {
+    const h = firstHint('+CPIN: NOT READY');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toBe('SIM-карта не готова (инициализация)');
+    expect(h.en).toBe('SIM not ready (initializing)');
+  });
+
+  it('+CGREG: 0,3 → error, в регистрации пакетной сети отказано', () => {
+    const h = firstHint('+CGREG: 0,3');
+    expect(h.severity).toBe('error');
+    expect(h.ru).toBe('В регистрации пакетной сети отказано');
+    expect(h.en).toBe('Packet network registration denied');
+  });
+
+  it('+CEREG: 0,3 → error, в регистрации LTE отказано', () => {
+    const h = firstHint('+CEREG: 0,3');
+    expect(h.severity).toBe('error');
+    expect(h.ru).toBe('В регистрации LTE отказано');
+    expect(h.en).toBe('LTE registration denied');
+  });
+
+  it('регресс: +QCSQ: "LTE",83,-100,121,-19 по-прежнему даёт warn c RSRP/RSRQ', () => {
+    const h = firstHint('+QCSQ: "LTE",83,-100,121,-19');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toContain('RSRP -100');
+    expect(h.ru).toContain('RSRQ -19');
+  });
+
+  it('регресс: +QCSQ: "GSM",-66 по-прежнему даёт ok', () => {
+    const h = firstHint('+QCSQ: "GSM",-66');
+    expect(h.severity).toBe('ok');
+    expect(h.ru).toContain('-66');
+    expect(h.ru).toContain('GSM');
+  });
+
+  it('регресс: +QCSQ: "NOSERVICE" по-прежнему error «Нет сигнала»', () => {
+    const h = firstHint('+QCSQ: "NOSERVICE"');
+    expect(h.severity).toBe('error');
+    expect(h.ru).toBe('Нет сигнала');
+  });
+});
+
 describe('gsmAnalyzer — §4 контекстные правила', () => {
   it('Зомби-сокет: после +CREG: 0,0 сокет в state 2 → error про зомби', () => {
     const log = ['+CREG: 0,0', '+QISTATE: 0,"TCP","10.0.0.5",5601,1234,2,1,0,0'].join('\n');

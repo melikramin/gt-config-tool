@@ -15,10 +15,7 @@ function plain(id: string, test: RegExp, severity: Hint['severity'], en: string,
 
 // --- §3.6 Пороги сигнала ---------------------------------------------------
 
-function buildQcsqLte(m: RegExpMatchArray): Hint {
-  const rsrp = parseInt(m[2], 10);
-  const rsrq = parseInt(m[4], 10);
-
+function buildQcsqLte(rsrp: number, rsrq: number): Hint {
   let wEn: string, wRu: string;
   if (rsrp >= -90) { wEn = 'excellent'; wRu = 'отличный'; }
   else if (rsrp >= -105) { wEn = 'good'; wRu = 'хороший'; }
@@ -38,8 +35,7 @@ function buildQcsqLte(m: RegExpMatchArray): Hint {
   };
 }
 
-function buildQcsqGsm(m: RegExpMatchArray): Hint {
-  const dbm = parseInt(m[1], 10);
+function buildQcsqGsm(dbm: number): Hint {
   let wEn: string, wRu: string;
   if (dbm >= -75) { wEn = 'excellent'; wRu = 'отличный'; }
   else if (dbm >= -90) { wEn = 'good'; wRu = 'хороший'; }
@@ -50,6 +46,16 @@ function buildQcsqGsm(m: RegExpMatchArray): Hint {
     severity,
     en: `GSM signal ${wEn} (${dbm} dBm)`,
     ru: `Сигнал GSM ${wRu} (${dbm} dBm)`,
+  };
+}
+
+function buildQcsqWcdma(rscp: number, ecno: number): Hint {
+  // §пороги: RSCP < -95 → слабо/очень слабо; Ec/No < -13 → плохое качество.
+  const severity: Hint['severity'] = rscp < -95 || ecno < -13 ? 'warn' : 'info';
+  return {
+    severity,
+    en: `3G (WCDMA) signal RSCP ${rscp} dBm, Ec/No ${ecno} dB`,
+    ru: `Сигнал 3G (WCDMA) RSCP ${rscp} dBm, Ec/No ${ecno} dB`,
   };
 }
 
@@ -74,6 +80,7 @@ function regDown(ctx: GsmContext): void {
 export const GSM_RULES: Rule[] = [
   // --- §3.1 SIM / питание ---
   plain('cpin-ready', /\+CPIN:\s*READY/, 'ok', 'SIM ready', 'SIM-карта готова'),
+  plain('cpin-not-ready', /\+CPIN:\s*NOT READY/, 'warn', 'SIM not ready (initializing)', 'SIM-карта не готова (инициализация)'),
   plain('cme-10', /\+CME ERROR:\s*10\b/, 'error', 'SIM not inserted', 'SIM-карта не вставлена'),
   plain('cme-13', /\+CME ERROR:\s*13\b/, 'error', 'SIM failure', 'Ошибка SIM-карты'),
   plain('cme-14', /\+CME ERROR:\s*14\b/, 'warn', 'SIM busy, retrying', 'SIM занята, повтор'),
@@ -155,6 +162,12 @@ export const GSM_RULES: Rule[] = [
     updateContext: (_m, ctx) => { ctx.registered = false; },
   },
   {
+    id: 'cgreg-3',
+    test: /\+CGREG:\s*\d+,\s*3\b/,
+    build: () => ({ severity: 'error', en: 'Packet network registration denied', ru: 'В регистрации пакетной сети отказано' }),
+    updateContext: (_m, ctx) => { ctx.registered = false; },
+  },
+  {
     id: 'cereg-1',
     test: /\+CEREG:\s*\d+,\s*1\b/,
     build: () => ({ severity: 'info', en: 'LTE registered (not internet yet)', ru: 'LTE зарегистрирован (это ещё не интернет)' }),
@@ -164,6 +177,12 @@ export const GSM_RULES: Rule[] = [
     id: 'cereg-0',
     test: /\+CEREG:\s*\d+,\s*0\b/,
     build: () => ({ severity: 'info', en: 'LTE not registered', ru: 'LTE не зарегистрирован' }),
+    updateContext: (_m, ctx) => { ctx.registered = false; },
+  },
+  {
+    id: 'cereg-3',
+    test: /\+CEREG:\s*\d+,\s*3\b/,
+    build: () => ({ severity: 'error', en: 'LTE registration denied', ru: 'В регистрации LTE отказано' }),
     updateContext: (_m, ctx) => { ctx.registered = false; },
   },
   {
@@ -190,16 +209,24 @@ export const GSM_RULES: Rule[] = [
     },
   },
   {
-    id: 'qcsq-lte',
-    test: /\+QCSQ:\s*"LTE",\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)/,
-    build: (m) => buildQcsqLte(m),
-    updateContext: (_m, ctx) => { ctx.lastRat = 'LTE'; },
-  },
-  {
-    id: 'qcsq-gsm',
-    test: /\+QCSQ:\s*"GSM",\s*(-?\d+)/,
-    build: (m) => buildQcsqGsm(m),
-    updateContext: (_m, ctx) => { ctx.lastRat = 'GSM'; },
+    // Единое правило QCSQ с ветвлением по типу сети (RAT). Поля:
+    //   LTE:   rssi, rsrp, sinr, rsrq  → берём rsrp/rsrq
+    //   GSM:   rxlev(dBm)              → берём dBm
+    //   WCDMA: rssi, rscp, ecno        → берём rscp/ecno
+    id: 'qcsq',
+    test: /\+QCSQ:\s*"([^"]+)"((?:,\s*-?\d+)*)/,
+    build: (m) => {
+      const rat = m[1].toUpperCase();
+      const nums = (m[2].match(/-?\d+/g) ?? []).map(Number);
+      if (rat === 'LTE' && nums.length >= 4) return buildQcsqLte(nums[1], nums[3]);
+      if (rat === 'GSM' && nums.length >= 1) return buildQcsqGsm(nums[0]);
+      if (rat === 'WCDMA' && nums.length >= 3) return buildQcsqWcdma(nums[1], nums[2]);
+      return null; // прочее (напр. "NOSERVICE") — отдаём следующему правилу
+    },
+    updateContext: (m, ctx) => {
+      const rat = m[1].toUpperCase();
+      if (rat === 'LTE' || rat === 'GSM' || rat === 'WCDMA') ctx.lastRat = rat;
+    },
   },
   {
     id: 'qcsq-noservice',
