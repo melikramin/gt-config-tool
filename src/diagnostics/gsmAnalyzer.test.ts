@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeGsmLog, hintText } from './gsmAnalyzer';
+import { analyzeGsmLog, hintText, withGsm, withGps } from './gsmAnalyzer';
 import type { Hint } from './gsmAnalyzer.types';
 
 // Хелпер: подсказки для единственной строки в режиме gsm.
@@ -217,6 +217,22 @@ describe('gsmAnalyzer — GPS / NMEA (одна подсказка на блок)
       expect(withHint).toHaveLength(1);
       expect(withHint[0].hints[0].severity).toBe('ok');
     }
+  });
+});
+
+describe('gsmAnalyzer — аддитивное включение режима по каналам', () => {
+  it('withGsm добавляет GSM, не выключая GPS', () => {
+    expect(withGsm('off')).toBe('gsm');
+    expect(withGsm('gsm')).toBe('gsm');
+    expect(withGsm('gps')).toBe('all');
+    expect(withGsm('all')).toBe('all');
+  });
+
+  it('withGps добавляет GPS, не выключая GSM', () => {
+    expect(withGps('off')).toBe('gps');
+    expect(withGps('gps')).toBe('gps');
+    expect(withGps('gsm')).toBe('all');
+    expect(withGps('all')).toBe('all');
   });
 });
 

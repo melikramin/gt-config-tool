@@ -69,3 +69,13 @@ export function analyzeGsmLog(rawLog: string, mode: AnalyzeMode): AnalyzedLine[]
 export function hintText(hint: Hint, lang: Lang): string {
   return lang === 'ru' ? hint.ru : hint.en;
 }
+
+/** Добавляет GSM-измерение к режиму анализа, не выключая уже включённый GPS. */
+export function withGsm(mode: AnalyzeMode): AnalyzeMode {
+  return mode === 'gps' || mode === 'all' ? 'all' : 'gsm';
+}
+
+/** Добавляет GPS-измерение к режиму анализа, не выключая уже включённый GSM. */
+export function withGps(mode: AnalyzeMode): AnalyzeMode {
+  return mode === 'gsm' || mode === 'all' ? 'all' : 'gps';
+}

@@ -4,7 +4,7 @@ import { useStatusStore } from '../../stores/statusStore';
 import { useDiagnosticsStore } from '../../stores/diagnosticsStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
-import { analyzeGsmLog, hintText } from '../../diagnostics/gsmAnalyzer';
+import { analyzeGsmLog, hintText, withGsm, withGps } from '../../diagnostics/gsmAnalyzer';
 import type { AnalyzeMode, Severity } from '../../diagnostics/gsmAnalyzer.types';
 
 // --- GSM analyzer inline-hint styling (§1.2) ---
@@ -183,10 +183,18 @@ export const DiagnosticsTab: FC = () => {
         }
         return next;
       });
+      // Enabling a log channel auto-enables the matching analysis (additive, so
+      // the other dimension stays on). Disabling never turns analysis off — the
+      // user controls that via the mode selector.
+      if (enable) {
+        const mode = useDiagnosticsStore.getState().analyzeMode;
+        if (channel.id === 'gsm') setAnalyzeMode(withGsm(mode));
+        else if (channel.id === 'gnss') setAnalyzeMode(withGps(mode));
+      }
     } catch (err) {
       setLastError(`LOG error: ${(err as Error).message}`);
     }
-  }, [isConnected, password, setLastError, t]);
+  }, [isConnected, password, setLastError, setAnalyzeMode, t]);
 
   // Copy all
   const handleCopy = useCallback(async () => {

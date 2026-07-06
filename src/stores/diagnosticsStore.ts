@@ -32,7 +32,7 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set) => ({
   commandInput: '',
   enabledChannels: new Set<string>(),
   atLineStart: true,
-  analyzeMode: 'off',
+  analyzeMode: 'all', // анализ включён по умолчанию (GSM + GPS)
 
   appendLog: (text, withTimestamp) =>
     set((state) => {
