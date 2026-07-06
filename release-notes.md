@@ -1,11 +1,12 @@
-Release 2.1.6 — Keys/Tags import & write fixes
-
-Bug fixes
-• Tags/Keys tab — XLSX import no longer drops keys. Previously only IDs that were exactly 12 hex characters were accepted, so a list of normal-length keys imported just a handful. IDs are now normalized to the device's 12-hex-char format: shorter IDs are left-padded with zeros, over-long IDs keep their rightmost 12 chars (left bytes dropped), and the header row is correctly skipped.
-• Tags/Keys tab — writing thousands of keys is now fast. The keys table was being fully repainted on every command, which made a large write crawl even though the device replies instantly. The table is now memoized so write speed is limited only by the device.
+Release 2.1.7 — GSM/GNSS log analyzer, light-theme readability
 
 What's new
-• Tags/Keys tab — a "Loading…" indicator is shown on the Import button while a large file is being parsed.
-• Tags/Keys tab — tab switching is blocked while keys are being read or written, so the operation and its progress bar stay on screen instead of being lost.
-• Tags/Keys tab — when the list has more keys than the device has slots, only the first N (up to the device limit) are written instead of failing on overflow; the result message reports how many were written.
-• Tags/Keys tab — a "Stop" button can interrupt an in-progress write; the result message reports how many keys were written before stopping.
+• Diagnostics tab — a built-in GSM/GNSS log analyzer. As the device logs stream in, plain-language hints are shown inline (EN/RU): GSM registration and signal state, WCDMA/3G status, SIM problems (CPIN NOT READY), CGREG/CEREG "denied", and GPS fix quality parsed from NMEA (position, satellites in use, HDOP). The analyzer is on by default and switches automatically to the right mode when you enable the GSM or GNSS (GPS) log channel. Its hints are included in Copy All and Save, and can be selected/copied like any log text.
+• Diagnostics tab — an analysis mode selector (Off / GSM / GPS / All) at the top of the log.
+
+Improvements
+• Light theme — greatly improved readability, especially outdoors and in bright sunlight. Input fields are now white and clearly framed by their panels, borders are crisp, and text is near-black instead of low-contrast gray. Previously the light theme washed out into gray-on-gray. The dark theme is unchanged.
+• Analyzer hint colors are theme-aware, so they stay readable on a white background and never blend into the log text.
+
+Bug fixes
+• Protocol tab — the Save button no longer goes inactive after loading a template. Template-loaded values are treated as unsaved edits until they are written to the device.
