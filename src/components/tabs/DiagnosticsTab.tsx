@@ -79,6 +79,19 @@ export const DiagnosticsTab: FC = () => {
     [log, analyzeMode],
   );
 
+  // Text used by Copy All / Save / context-copy. In off mode it's the raw log;
+  // in analyze mode it mirrors the on-screen view — each line followed by its
+  // hint lines (icon + localized text) — so the analysis is copied and saved too.
+  const buildExportText = useCallback((): string => {
+    if (analyzeMode === 'off') return log;
+    return analyzedLines
+      .map((line) => {
+        const hintLines = line.hints.map((h) => `  ${SEVERITY_ICON[h.severity]} ${hintText(h, locale)}`);
+        return [line.raw, ...hintLines].join('\n');
+      })
+      .join('\n');
+  }, [analyzeMode, analyzedLines, log, locale]);
+
   // Custom right-click menu state. `target=log` shows just Copy (selection),
   // `target=input` shows Cut/Copy/Paste for the command field. We render our
   // own menu instead of relying on Electron's native one so the labels are
@@ -178,26 +191,26 @@ export const DiagnosticsTab: FC = () => {
   // Copy all
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(log);
+      await navigator.clipboard.writeText(buildExportText());
       setLastError(t('diag.copied'));
     } catch {
       // fallback
     }
-  }, [log, setLastError, t]);
+  }, [buildExportText, setLastError, t]);
 
   // Save to file
   const handleSave = useCallback(async () => {
     const now = new Date();
     const name = `gt9_log_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.txt`;
     try {
-      const saved = await window.dialog.saveFile(log, name);
+      const saved = await window.dialog.saveFile(buildExportText(), name);
       if (saved) {
         setLastError(t('diag.saved'));
       }
     } catch {
       // silent
     }
-  }, [log, setLastError, t]);
+  }, [buildExportText, setLastError, t]);
 
   // Clear log (user-initiated only — never clear automatically)
   const handleClear = useCallback(() => {
@@ -211,12 +224,14 @@ export const DiagnosticsTab: FC = () => {
   // menu was opened on the log.
   const ctxCopySelection = useCallback(async () => {
     const sel = window.getSelection()?.toString() ?? '';
-    const text = sel || (ctxMenu?.target === 'log' ? log : '');
+    // No live selection + log menu → copy everything (raw log, or the analyzed
+    // view when analysis is on), matching the Copy All button.
+    const text = sel || (ctxMenu?.target === 'log' ? buildExportText() : '');
     if (text) {
       try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
     }
     setCtxMenu(null);
-  }, [ctxMenu, log]);
+  }, [ctxMenu, buildExportText]);
 
   // Cut: copy the current selection in the input and remove it from the value.
   const ctxCutInput = useCallback(async () => {
@@ -422,7 +437,7 @@ export const DiagnosticsTab: FC = () => {
                   {line.hints.map((h, j) => (
                     <div
                       key={j}
-                      className="select-none pl-4 font-medium"
+                      className="pl-4 font-medium"
                       style={{ color: SEVERITY_COLOR[h.severity] }}
                     >
                       {SEVERITY_ICON[h.severity]} {hintText(h, locale)}
