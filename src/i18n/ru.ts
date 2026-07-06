@@ -301,6 +301,11 @@ export const ru: Translations = {
   'diag.ctxSelectAll': 'Выделить всё',
   'diag.ctxDelete': 'Удалить',
   'diag.ctxClear': 'Очистить',
+  'diag.analyze': 'Анализ',
+  'diag.analyzeOff': 'Выкл',
+  'diag.analyzeGsm': 'GSM',
+  'diag.analyzeGps': 'GPS',
+  'diag.analyzeAll': 'Все',
 
   // FLS (Level sensors) tab
   'fls.panelSensors': 'Датчики уровня',

@@ -301,6 +301,11 @@ export const en: Translations = {
   'diag.ctxSelectAll': 'Select All',
   'diag.ctxDelete': 'Delete',
   'diag.ctxClear': 'Clear',
+  'diag.analyze': 'Analyze',
+  'diag.analyzeOff': 'Off',
+  'diag.analyzeGsm': 'GSM',
+  'diag.analyzeGps': 'GPS',
+  'diag.analyzeAll': 'All',
 
   // FLS (Level sensors) tab
   'fls.panelSensors': 'Level sensors',

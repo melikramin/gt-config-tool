@@ -302,6 +302,11 @@ export interface Translations {
   'diag.ctxSelectAll': string;
   'diag.ctxDelete': string;
   'diag.ctxClear': string;
+  'diag.analyze': string;
+  'diag.analyzeOff': string;
+  'diag.analyzeGsm': string;
+  'diag.analyzeGps': string;
+  'diag.analyzeAll': string;
 
   // FLS (Level sensors) tab
   'fls.panelSensors': string;

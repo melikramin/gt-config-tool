@@ -1,16 +1,19 @@
 import { create } from 'zustand';
+import type { AnalyzeMode } from '../diagnostics/gsmAnalyzer.types';
 
 interface DiagnosticsState {
   log: string;
   commandInput: string;
   enabledChannels: Set<string>;
   atLineStart: boolean;
+  analyzeMode: AnalyzeMode;
 
   appendLog: (text: string, withTimestamp: boolean) => void;
   clearLog: () => void;
   setCommandInput: (value: string) => void;
   setEnabledChannels: (updater: (prev: Set<string>) => Set<string>) => void;
   clearEnabledChannels: () => void;
+  setAnalyzeMode: (mode: AnalyzeMode) => void;
 }
 
 const MAX_LOG_LENGTH = 200_000;
@@ -29,6 +32,7 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set) => ({
   commandInput: '',
   enabledChannels: new Set<string>(),
   atLineStart: true,
+  analyzeMode: 'off',
 
   appendLog: (text, withTimestamp) =>
     set((state) => {
@@ -65,4 +69,6 @@ export const useDiagnosticsStore = create<DiagnosticsState>((set) => ({
     set((state) => ({ enabledChannels: updater(state.enabledChannels) })),
 
   clearEnabledChannels: () => set({ enabledChannels: new Set<string>() }),
+
+  setAnalyzeMode: (analyzeMode) => set({ analyzeMode }),
 }));

@@ -1,9 +1,27 @@
-import { type FC, useState, useEffect, useRef, useCallback } from 'react';
+import { type FC, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
 import { useDiagnosticsStore } from '../../stores/diagnosticsStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
+import { analyzeGsmLog, hintText } from '../../diagnostics/gsmAnalyzer';
+import type { AnalyzeMode, Severity } from '../../diagnostics/gsmAnalyzer.types';
+
+// --- GSM analyzer inline-hint styling (§1.2) ---
+
+const SEVERITY_CLASS: Record<Severity, string> = {
+  ok: 'text-emerald-400',
+  info: 'text-sky-300',
+  warn: 'text-amber-400',
+  error: 'text-red-400',
+};
+
+const SEVERITY_ICON: Record<Severity, string> = {
+  ok: '✓',
+  info: 'ℹ',
+  warn: '⚠',
+  error: '✕',
+};
 
 // --- Log channel definitions ---
 
@@ -37,17 +55,27 @@ export const DiagnosticsTab: FC = () => {
     log,
     commandInput,
     enabledChannels,
+    analyzeMode,
     appendLog: appendLogStore,
     clearLog,
     setCommandInput,
     setEnabledChannels,
+    setAnalyzeMode,
   } = useDiagnosticsStore();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const [addTime, setAddTime] = useState(false);
   const [wordWrap, setWordWrap] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
   const [isSending, setIsSending] = useState(false);
+
+  // Analyze the raw log into per-line hints. Memoized on log + mode only — the
+  // analysis is language-independent (each Hint carries both en/ru), so a locale
+  // switch just re-renders text without re-running the analyzer.
+  const analyzedLines = useMemo(
+    () => (analyzeMode === 'off' ? [] : analyzeGsmLog(log, analyzeMode)),
+    [log, analyzeMode],
+  );
 
   // Custom right-click menu state. `target=log` shows just Copy (selection),
   // `target=input` shows Cut/Copy/Paste for the command field. We render our
@@ -55,7 +83,9 @@ export const DiagnosticsTab: FC = () => {
   // localized and the actions can use clipboard / DOM APIs directly.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: 'log' | 'input' } | null>(null);
 
-  const logRef = useRef<HTMLPreElement>(null);
+  // Off mode renders a <pre>, analyze mode a <div>; a callback ref covers both.
+  const logRef = useRef<HTMLElement | null>(null);
+  const setLogRef = useCallback((el: HTMLElement | null) => { logRef.current = el; }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const addTimeRef = useRef(addTime);
   addTimeRef.current = addTime;
@@ -322,6 +352,20 @@ export const DiagnosticsTab: FC = () => {
           {t('diag.wordWrap')}
         </label>
 
+        <label className="flex items-center gap-1.5 text-sm text-zinc-300 select-none">
+          {t('diag.analyze')}
+          <select
+            value={analyzeMode}
+            onChange={(e) => setAnalyzeMode(e.target.value as AnalyzeMode)}
+            className="bg-zinc-800 text-zinc-200 text-sm border border-zinc-600 rounded px-1.5 py-0.5 cursor-pointer"
+          >
+            <option value="off">{t('diag.analyzeOff')}</option>
+            <option value="gsm">{t('diag.analyzeGsm')}</option>
+            <option value="gps">{t('diag.analyzeGps')}</option>
+            <option value="all">{t('diag.analyzeAll')}</option>
+          </select>
+        </label>
+
         <div className="flex-1" />
 
         <button
@@ -340,20 +384,51 @@ export const DiagnosticsTab: FC = () => {
 
       {/* Main area: log + channel sidebar */}
       <div className="flex flex-1 min-h-0">
-        {/* Log display */}
-        <pre
-          ref={logRef}
-          onScroll={handleLogScroll}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setCtxMenu({ x: e.clientX, y: e.clientY, target: 'log' });
-          }}
-          className={`flex-1 p-2 text-xs text-[var(--terminal-fg)] bg-zinc-950 font-mono overflow-auto select-text ${
-            wordWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
-          }`}
-        >
-          {log || <span className="text-zinc-500 italic">{'...'}</span>}
-        </pre>
+        {/* Log display. Off mode keeps the raw single-string <pre> exactly as
+            before (the context-menu offset editing relies on its 1:1 text
+            mapping). Analyze mode renders line-by-line with inline hints. */}
+        {analyzeMode === 'off' ? (
+          <pre
+            ref={setLogRef}
+            onScroll={handleLogScroll}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setCtxMenu({ x: e.clientX, y: e.clientY, target: 'log' });
+            }}
+            className={`flex-1 p-2 text-xs text-[var(--terminal-fg)] bg-zinc-950 font-mono overflow-auto select-text ${
+              wordWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
+            }`}
+          >
+            {log || <span className="text-zinc-500 italic">{'...'}</span>}
+          </pre>
+        ) : (
+          <div
+            ref={setLogRef}
+            onScroll={handleLogScroll}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setCtxMenu({ x: e.clientX, y: e.clientY, target: 'log' });
+            }}
+            className="flex-1 p-2 text-xs text-[var(--terminal-fg)] bg-zinc-950 font-mono overflow-auto select-text"
+          >
+            {log ? (
+              analyzedLines.map((line, i) => (
+                <div key={i}>
+                  <div className={wordWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'}>
+                    {line.raw === '' ? ' ' : line.raw}
+                  </div>
+                  {line.hints.map((h, j) => (
+                    <div key={j} className={`select-none pl-4 ${SEVERITY_CLASS[h.severity]}`}>
+                      {SEVERITY_ICON[h.severity]} {hintText(h, locale)}
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : (
+              <span className="text-zinc-500 italic">{'...'}</span>
+            )}
+          </div>
+        )}
 
         {/* Channel sidebar */}
         <div className="w-36 border-l border-zinc-700 bg-zinc-900/50 p-2 overflow-y-auto">
@@ -475,13 +550,15 @@ export const DiagnosticsTab: FC = () => {
                 >
                   {t('diag.ctxSelectAll')}
                 </button>
-                <button
-                  type="button"
-                  onClick={ctxDeleteLogSelection}
-                  className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
-                >
-                  {t('diag.ctxDelete')}
-                </button>
+                {analyzeMode === 'off' && (
+                  <button
+                    type="button"
+                    onClick={ctxDeleteLogSelection}
+                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-700"
+                  >
+                    {t('diag.ctxDelete')}
+                  </button>
+                )}
                 <div className="my-1 border-t border-zinc-700" />
                 <button
                   type="button"
