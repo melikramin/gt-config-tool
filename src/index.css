@@ -11,6 +11,14 @@ body {
    Default = dark theme. Overridden below for light theme. */
 :root {
   --terminal-fg: #4ade80; /* green-400 — readable on near-black */
+
+  /* GSM analyzer inline-hint colors (§1.2). Kept separate from --terminal-fg so
+     hints never share the log's green, and theme-aware so they stay readable on
+     the white terminal background in light mode. Dark theme = vivid shades. */
+  --hint-ok: #34d399;    /* emerald-400 */
+  --hint-info: #7dd3fc;  /* sky-300 */
+  --hint-warn: #fbbf24;  /* amber-400 */
+  --hint-error: #f87171; /* red-400 */
 }
 
 /* Light theme: invert the zinc scale so existing utility classes flip with one
@@ -30,6 +38,13 @@ body {
   --color-zinc-900: #f4f4f5;
   --color-zinc-950: #ffffff;
   --terminal-fg: #166534; /* green-800 — readable on white */
+
+  /* Light theme: darker, saturated hint shades stay visible on the white
+     terminal background. */
+  --hint-ok: #047857;    /* emerald-700 */
+  --hint-info: #0369a1;  /* sky-700 */
+  --hint-warn: #b45309;  /* amber-700 */
+  --hint-error: #b91c1c; /* red-700 */
 }
 
 ::-webkit-scrollbar {

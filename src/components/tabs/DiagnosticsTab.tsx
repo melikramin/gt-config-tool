@@ -9,11 +9,13 @@ import type { AnalyzeMode, Severity } from '../../diagnostics/gsmAnalyzer.types'
 
 // --- GSM analyzer inline-hint styling (§1.2) ---
 
-const SEVERITY_CLASS: Record<Severity, string> = {
-  ok: 'text-emerald-400',
-  info: 'text-sky-300',
-  warn: 'text-amber-400',
-  error: 'text-red-400',
+// Theme-aware hint colors (defined in index.css) — deliberately NOT --terminal-fg
+// so hints never blend into the green log text, and readable in light mode.
+const SEVERITY_COLOR: Record<Severity, string> = {
+  ok: 'var(--hint-ok)',
+  info: 'var(--hint-info)',
+  warn: 'var(--hint-warn)',
+  error: 'var(--hint-error)',
 };
 
 const SEVERITY_ICON: Record<Severity, string> = {
@@ -418,7 +420,11 @@ export const DiagnosticsTab: FC = () => {
                     {line.raw === '' ? ' ' : line.raw}
                   </div>
                   {line.hints.map((h, j) => (
-                    <div key={j} className={`select-none pl-4 ${SEVERITY_CLASS[h.severity]}`}>
+                    <div
+                      key={j}
+                      className="select-none pl-4 font-medium"
+                      style={{ color: SEVERITY_COLOR[h.severity] }}
+                    >
                       {SEVERITY_ICON[h.severity]} {hintText(h, locale)}
                     </div>
                   ))}
