@@ -1,12 +1,13 @@
-Release 2.1.7 — GSM/GNSS log analyzer, light-theme readability
+Release 2.1.8 — GSM analyzer: modem reboots, socket errors, LTE search
 
 What's new
-• Diagnostics tab — a built-in GSM/GNSS log analyzer. As the device logs stream in, plain-language hints are shown inline (EN/RU): GSM registration and signal state, WCDMA/3G status, SIM problems (CPIN NOT READY), CGREG/CEREG "denied", and GPS fix quality parsed from NMEA (position, satellites in use, HDOP). The analyzer is on by default and switches automatically to the right mode when you enable the GSM or GNSS (GPS) log channel. Its hints are included in Copy All and Save, and can be selected/copied like any log text.
-• Diagnostics tab — an analysis mode selector (Off / GSM / GPS / All) at the top of the log.
+• Diagnostics tab — the GSM log analyzer now explains modem reboots. RDY and +CFUN: 1 are recognized as "modem booted and ready" and "radio module on", so a restart in the middle of a log is obvious instead of looking like random noise.
+• Diagnostics tab — modem time (+CCLK) is now shown, and an unsynchronized clock is called out as a warning. A modem reporting year 04 or 80 has not received time from the network yet — a common reason a device looks alive while its records land with wrong timestamps.
+• Diagnostics tab — full coverage of Quectel socket open errors: server unreachable (566), operation busy (568), operation timeout (569), PDP context broken down (570), APN not configured (573) and port busy (574). Previously these codes went by unexplained.
+• Diagnostics tab — the missing LTE registration states: searching for network (+CEREG: 0,2), unknown state (0,4) and registered in roaming (0,5). A long LTE search is now flagged the same way a long 2G/3G search already was.
 
 Improvements
-• Light theme — greatly improved readability, especially outdoors and in bright sunlight. Input fields are now white and clearly framed by their panels, borders are crisp, and text is near-black instead of low-contrast gray. Previously the light theme washed out into gray-on-gray. The dark theme is unchanged.
-• Analyzer hint colors are theme-aware, so they stay readable on a white background and never blend into the log text.
+• Server settings — the server response timeout sent with the connection settings is now 10 seconds instead of 30, so the device notices a dead link and reconnects faster.
 
 Bug fixes
-• Protocol tab — the Save button no longer goes inactive after loading a template. Template-loaded values are treated as unsaved edits until they are written to the device.
+• Diagnostics tab — +QIOPEN: <id>,567 was explained incorrectly as "socket open aborted/timeout". Per the Quectel manual 567 means the socket has been closed, and in practice it arrives right after the firmware itself closed the socket by its own timeout. It is now shown as a warning with the correct meaning, so it is no longer mistaken for a connection failure.
