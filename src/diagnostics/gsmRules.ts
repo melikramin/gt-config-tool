@@ -59,6 +59,20 @@ function buildQcsqWcdma(rscp: number, ecno: number): Hint {
   };
 }
 
+// --- Время модема ----------------------------------------------------------
+
+// Год < 20 (напр. 04, 80) означает, что модем ещё не получил время из сети.
+function buildCclk(raw: string, yy: string): Hint {
+  if (parseInt(yy, 10) < 20) {
+    return {
+      severity: 'warn',
+      en: `Modem time not synced (${raw})`,
+      ru: `Время модема не синхронизировано (${raw})`,
+    };
+  }
+  return { severity: 'info', en: `Modem time ${raw}`, ru: `Время модема ${raw}` };
+}
+
 // --- Обновление контекста для регистрации ----------------------------------
 
 function regUp(ctx: GsmContext): void {
@@ -93,6 +107,12 @@ export const GSM_RULES: Rule[] = [
     id: 'cbc',
     test: /\+CBC:\s*0,\s*(\d+),\s*(\d+)/,
     build: (m) => ({ severity: 'info', en: `Battery ${m[1]}% (${m[2]} mV)`, ru: `Батарея ${m[1]}% (${m[2]} мВ)` }),
+  },
+  {
+    // +CCLK: "yy/mm/dd,hh:mm:ss+tz" — по году видно, синхронизировалось ли время.
+    id: 'cclk',
+    test: /\+CCLK:\s*"((\d{2})\/[^"]+)"/,
+    build: (m) => buildCclk(m[1], m[2]),
   },
 
   // --- §3.2 Оператор / регистрация ---
@@ -184,6 +204,23 @@ export const GSM_RULES: Rule[] = [
     test: /\+CEREG:\s*\d+,\s*3\b/,
     build: () => ({ severity: 'error', en: 'LTE registration denied', ru: 'В регистрации LTE отказано' }),
     updateContext: (_m, ctx) => { ctx.registered = false; },
+  },
+  {
+    id: 'cereg-2',
+    test: /\+CEREG:\s*\d+,\s*2\b/,
+    build: () => ({ severity: 'warn', en: 'Searching for LTE network...', ru: 'Идёт поиск сети LTE...' }),
+    updateContext: (_m, ctx) => { ctx.registered = false; ctx.regSearchStreak = (ctx.regSearchStreak ?? 0) + 1; },
+  },
+  {
+    id: 'cereg-4',
+    test: /\+CEREG:\s*\d+,\s*4\b/,
+    build: () => ({ severity: 'warn', en: 'LTE registration state unknown', ru: 'Состояние регистрации LTE неизвестно' }),
+  },
+  {
+    id: 'cereg-5',
+    test: /\+CEREG:\s*\d+,\s*5\b/,
+    build: () => ({ severity: 'ok', en: 'LTE registered (roaming)', ru: 'LTE зарегистрирован (роуминг)' }),
+    updateContext: (_m, ctx) => regUp(ctx),
   },
   {
     id: 'qspn',
@@ -287,7 +324,15 @@ export const GSM_RULES: Rule[] = [
   plain('qiopen-ok', /\+QIOPEN:\s*\d+,\s*0\b/, 'ok', 'Connected to server', 'Подключился к серверу'),
   plain('qiopen-563', /\+QIOPEN:\s*\d+,\s*563\b/, 'error', 'Socket busy (not released) — needs QICLOSE', 'Сокет занят (не освобождён) — нужен QICLOSE'),
   plain('qiopen-565', /\+QIOPEN:\s*\d+,\s*565\b/, 'error', 'Socket open failed (network)', 'Не удалось открыть сокет (сеть)'),
-  plain('qiopen-567', /\+QIOPEN:\s*\d+,\s*567\b/, 'error', 'Socket open aborted/timeout', 'Открытие сокета прервано/таймаут'),
+  plain('qiopen-566', /\+QIOPEN:\s*\d+,\s*566\b/, 'error', 'Socket connect failed (server unreachable)', 'Не удалось подключиться к серверу'),
+  // 567 = «Socket has been closed» (мануал Quectel), а не таймаут: на практике
+  // приходит после того, как прошивка сама вызвала QICLOSE по своему таймауту.
+  plain('qiopen-567', /\+QIOPEN:\s*\d+,\s*567\b/, 'warn', 'Socket has been closed (usually after our own QICLOSE)', 'Сокет закрыт (обычно после нашего же QICLOSE)'),
+  plain('qiopen-568', /\+QIOPEN:\s*\d+,\s*568\b/, 'warn', 'Operation busy', 'Операция занята'),
+  plain('qiopen-569', /\+QIOPEN:\s*\d+,\s*569\b/, 'error', 'Operation timeout', 'Таймаут операции'),
+  plain('qiopen-570', /\+QIOPEN:\s*\d+,\s*570\b/, 'error', 'PDP context broken down', 'PDP-контекст разрушен'),
+  plain('qiopen-573', /\+QIOPEN:\s*\d+,\s*573\b/, 'error', 'APN not configured', 'APN не настроен'),
+  plain('qiopen-574', /\+QIOPEN:\s*\d+,\s*574\b/, 'error', 'Port busy', 'Порт занят'),
   {
     id: 'qistate-query',
     test: /AT\+QISTATE\??/,
@@ -344,6 +389,9 @@ export const GSM_RULES: Rule[] = [
   plain('data-send', /#D#/, 'info', 'Sending data record...', 'Отправка записи данных...'),
   plain('send-ok', /\bSEND OK\b/, 'info', 'Data handed to modem buffer (not yet server ack)', 'Данные переданы в буфер модема (ещё не подтв. сервером)'),
   plain('powerdown', /AT\+QPOWD=1|POWERED DOWN/, 'warn', 'Modem reboot', 'Перезагрузка модема'),
+  // Маркеры старта модема (обратная сторона powerdown).
+  plain('rdy', /\bRDY\b/, 'info', 'Modem booted and ready', 'Модем загрузился и готов'),
+  plain('cfun-1', /\+CFUN:\s*1\b/, 'info', 'Radio module on (full functionality)', 'Радиомодуль включён (полный режим)'),
 ];
 
 // ===========================================================================

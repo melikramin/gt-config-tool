@@ -123,6 +123,95 @@ describe('gsmAnalyzer — новые правила (WCDMA / CPIN NOT READY / de
   });
 });
 
+describe('gsmAnalyzer — правила по реальному логу (CEREG / QIOPEN / RDY / CCLK)', () => {
+  it('+CEREG: 0,2 → warn, идёт поиск сети LTE', () => {
+    const h = firstHint('+CEREG: 0,2');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toBe('Идёт поиск сети LTE...');
+    expect(h.en).toBe('Searching for LTE network...');
+  });
+
+  it('+CEREG: 0,4 → warn, состояние регистрации неизвестно', () => {
+    const h = firstHint('+CEREG: 0,4');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toBe('Состояние регистрации LTE неизвестно');
+  });
+
+  it('+CEREG: 0,5 → ok, LTE в роуминге', () => {
+    const h = firstHint('+CEREG: 0,5');
+    expect(h.severity).toBe('ok');
+    expect(h.ru).toBe('LTE зарегистрирован (роуминг)');
+    expect(h.en).toBe('LTE registered (roaming)');
+  });
+
+  it('+QIOPEN: 0,566 → error, сервер недоступен', () => {
+    const h = firstHint('+QIOPEN: 0,566');
+    expect(h.severity).toBe('error');
+    expect(h.ru).toBe('Не удалось подключиться к серверу');
+    expect(h.en).toBe('Socket connect failed (server unreachable)');
+  });
+
+  it('+QIOPEN: 0,567 → warn, сокет закрыт после нашего же QICLOSE (не таймаут)', () => {
+    const h = firstHint('+QIOPEN: 0,567');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toBe('Сокет закрыт (обычно после нашего же QICLOSE)');
+    expect(h.en).toBe('Socket has been closed (usually after our own QICLOSE)');
+  });
+
+  it('+QIOPEN: 0,570 → error, PDP-контекст разрушен', () => {
+    const h = firstHint('+QIOPEN: 0,570');
+    expect(h.severity).toBe('error');
+    expect(h.ru).toBe('PDP-контекст разрушен');
+    expect(h.en).toBe('PDP context broken down');
+  });
+
+  it('RDY → info, модем загрузился', () => {
+    const h = firstHint('RDY');
+    expect(h.severity).toBe('info');
+    expect(h.ru).toBe('Модем загрузился и готов');
+    expect(h.en).toBe('Modem booted and ready');
+  });
+
+  it('+CFUN: 1 → info, радиомодуль включён', () => {
+    const h = firstHint('+CFUN: 1');
+    expect(h.severity).toBe('info');
+    expect(h.ru).toBe('Радиомодуль включён (полный режим)');
+  });
+
+  it('+CCLK с годом 04 → warn, время не синхронизировано', () => {
+    const h = firstHint('+CCLK: "04/01/01,00:02:46+00"');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toContain('не синхронизировано');
+    expect(h.ru).toContain('04/01/01,00:02:46+00');
+    expect(h.en).toContain('not synced');
+  });
+
+  it('+CCLK с нормальным годом → info, просто время модема', () => {
+    const h = firstHint('+CCLK: "26/07/16,16:18:51+00"');
+    expect(h.severity).toBe('info');
+    expect(h.ru).toBe('Время модема 26/07/16,16:18:51+00');
+    expect(h.en).toBe('Modem time 26/07/16,16:18:51+00');
+  });
+
+  it('регресс: +QIOPEN: 0,563 по-прежнему error «сокет занят»', () => {
+    const h = firstHint('+QIOPEN: 0,563');
+    expect(h.severity).toBe('error');
+    expect(h.ru).toContain('занят');
+  });
+
+  it('регресс: +CEREG: 0,1 не перехвачен новыми правилами', () => {
+    const h = firstHint('+CEREG: 0,1');
+    expect(h.severity).toBe('info');
+    expect(h.ru).toBe('LTE зарегистрирован (это ещё не интернет)');
+  });
+
+  it('регресс: +CREG: 0,2 остаётся про поиск сети (не LTE-правило)', () => {
+    const h = firstHint('+CREG: 0,2');
+    expect(h.severity).toBe('warn');
+    expect(h.ru).toBe('Идёт поиск сети...');
+  });
+});
+
 describe('gsmAnalyzer — §4 контекстные правила', () => {
   it('Зомби-сокет: после +CREG: 0,0 сокет в state 2 → error про зомби', () => {
     const log = ['+CREG: 0,0', '+QISTATE: 0,"TCP","10.0.0.5",5601,1234,2,1,0,0'].join('\n');
