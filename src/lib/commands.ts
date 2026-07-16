@@ -152,8 +152,20 @@ export function buildServerReadCmd(password: string, index: number): string {
 }
 
 /**
+ * Timeouts sent with SERVERn;SET (seconds). Not exposed in the UI yet.
+ * LOGIN_TOUT — ожидание логин-пакета
+ * TRANSFER_TOUT — интервал между отправками (0 = без задержки)
+ * PING_TOUT — период отправки пинга
+ * RESP_TOUT — ожидание ответа на любой пакет (данные)
+ */
+export const SERVER_LOGIN_TOUT = '10';
+export const SERVER_TRANSFER_TOUT = '0';
+export const SERVER_PING_TOUT = '120';
+export const SERVER_RESP_TOUT = '10';
+
+/**
  * Write server settings:
- * $PASS;SERVERn;SET;0F;01;IP;PORT;IMEI;IMEI;10;0;120;30;1;CHANNEL;PROTOCOL
+ * $PASS;SERVERn;SET;0F;01;IP;PORT;IMEI;IMEI;10;0;120;10;1;CHANNEL;PROTOCOL
  * Hidden fields: SERVER_PROP=0F, PROTO_PROP=01, LOGIN/PASS=IMEI, timeouts, IP_PROTO=1.
  * CHANNEL: 0=GSM, 1=WiFi, 2=GSM+WiFi, 3=WiFi+GSM
  * PROTOCOL: 0=IPS, 1=GT9
@@ -169,7 +181,9 @@ export function buildServerWriteCmd(
 ): string {
   return buildCmd(password, `SERVER${index}`, [
     'SET', '0F', '01', ip, port,
-    imei, imei, '10', '0', '120', '30', '1', channel, protocol,
+    imei, imei,
+    SERVER_LOGIN_TOUT, SERVER_TRANSFER_TOUT, SERVER_PING_TOUT, SERVER_RESP_TOUT,
+    '1', channel, protocol,
   ]);
 }
 

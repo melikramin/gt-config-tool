@@ -287,7 +287,7 @@ Use TanStack Table with `@tanstack/react-virtual` for virtualization — DO NOT 
 Plain text file with raw commands, one per line:
 ```
 $1234;APN;internet.mts.ru;mts;mts
-$1234;SERVER1;SET;0F;01;s4.geotek.online;5601;IMEI;IMEI;10;0;120;30;1;0;1
+$1234;SERVER1;SET;0F;01;s4.geotek.online;5601;IMEI;IMEI;10;0;120;10;1;0;1
 $1234;FILTER;1,300;1,15;1,2;1,60;1;120;120
 ...
 ```
