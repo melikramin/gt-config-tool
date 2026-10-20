@@ -3,6 +3,7 @@ import { useConnectionStore } from '../../stores/connectionStore';
 import { useStatusStore } from '../../stores/statusStore';
 import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
+import { isGt2 } from '../../types/device';
 
 function isErrorResponse(response: string): boolean {
   const t = response.trim();
@@ -31,6 +32,16 @@ const ACTIONS: SystemAction[] = [
   { key: 'tagsDel',  titleKey: 'sys.tagsDelTitle',  descKey: 'sys.tagsDelDesc',  btnKey: 'sys.tagsDelBtn',  command: 'TAGS;DEL;ALL', irreversible: true,  accent: 'red'    },
   { key: 'msensCal', titleKey: 'sys.msensCalTitle', descKey: 'sys.msensCalDesc', btnKey: 'sys.msensCalBtn', command: 'MSENS;CAL;A',  irreversible: false, accent: 'blue'   },
 ];
+
+/**
+ * GT-2: start the Bluetooth (BLE) module update. The device just arms the BLE
+ * bootloader and keeps working; the update itself is done from a phone.
+ */
+const BLE_UPDATE: SystemAction = { key: 'bleUpdate', titleKey: 'sys.bleUpdateTitle', descKey: 'sys.bleUpdateDesc', btnKey: 'sys.bleUpdateBtn', command: 'GT2;UPDATE', irreversible: false, accent: 'blue' };
+
+/** GT-2 has no tag memory / keys / accelerometer / SD card. */
+const GT2_ACTION_KEYS: ReadonlySet<string> = new Set(['factory', 'default']);
+const GT2_ACTIONS: SystemAction[] = [...ACTIONS.filter((a) => GT2_ACTION_KEYS.has(a.key)), BLE_UPDATE];
 
 const SD_ON: SystemAction  = { key: 'sdOn',  titleKey: 'sys.sdOnTitle',  descKey: 'sys.sdDesc', btnKey: 'sys.sdOnBtn',  command: 'SDCARD;SET;1', sendResetAfter: true, irreversible: false, accent: 'blue' };
 const SD_OFF: SystemAction = { key: 'sdOff', titleKey: 'sys.sdOffTitle', descKey: 'sys.sdDesc', btnKey: 'sys.sdOffBtn', command: 'SDCARD;SET;0', sendResetAfter: true, irreversible: false, accent: 'blue' };
@@ -69,6 +80,7 @@ const FirmwareStep: FC<{ active: boolean; done: boolean; label: string }> = ({ a
 
 export const SystemTab: FC = () => {
   const { password, isConnected, setConnected } = useConnectionStore();
+  const gt2 = useConnectionStore((s) => isGt2(s.deviceType));
   const { setLastError, setShowPasswordError, setSystemBusy } = useStatusStore();
   const { t } = useI18n();
 
@@ -284,7 +296,8 @@ export const SystemTab: FC = () => {
     return () => setSystemBusy(false);
   }, [setSystemBusy]);
 
-  const allActions: SystemAction[] = [...ACTIONS, SD_ON, SD_OFF];
+  const actions = gt2 ? GT2_ACTIONS : ACTIONS;
+  const allActions: SystemAction[] = [...ACTIONS, BLE_UPDATE, SD_ON, SD_OFF];
   const currentAction = runningKey ? allActions.find((a) => a.key === runningKey) : null;
   const currentActionLabel = currentAction ? t(currentAction.titleKey) : '';
 
@@ -403,7 +416,7 @@ export const SystemTab: FC = () => {
 
       <Panel title={t('sys.panelActions')}>
         <div className="flex flex-wrap gap-3">
-          {ACTIONS.map((action) => {
+          {actions.map((action) => {
             const running = runningKey === action.key;
             const anyRunning = runningKey !== null;
             return (
@@ -431,7 +444,8 @@ export const SystemTab: FC = () => {
             );
           })}
 
-          {/* Combined SD card */}
+          {/* Combined SD card (GT-2 has no SD slot) */}
+          {!gt2 && (
           <div className={`basis-[calc((100%-1.5rem)/3)] min-w-[240px] grow bg-zinc-800/60 border ${ACCENT_BORDER.blue} rounded p-3 flex flex-col`}>
             <div className="flex items-start gap-2 mb-2">
               <h4 className="text-zinc-100 text-sm font-semibold flex-1">{t('sys.sdTitle')}</h4>
@@ -454,6 +468,7 @@ export const SystemTab: FC = () => {
               </button>
             </div>
           </div>
+          )}
         </div>
       </Panel>
 

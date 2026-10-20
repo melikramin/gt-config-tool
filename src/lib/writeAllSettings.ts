@@ -10,6 +10,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import {
   buildApnWriteCmd,
   buildServerWriteCmd,
+  buildGt2ServerWriteCmd,
   buildPrset20SetCmd,
   buildPrset21SetCmd,
   buildWifiNetWriteCmd,
@@ -41,6 +42,7 @@ import {
   type RsPortName,
   type WifiNetworkParams,
 } from './commands';
+import { isGt2 } from '../types/device';
 
 function isErrorResponse(r: string): boolean {
   const t = r.trim();
@@ -61,7 +63,9 @@ interface WriteAllCallbacks {
  */
 export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<boolean> {
   const settings = useSettingsStore.getState();
-  const { password, isConnected, deviceImei } = useConnectionStore.getState();
+  const { password, isConnected, deviceImei, deviceType } = useConnectionStore.getState();
+  // GT-2: no GSM (no APN), GT-2 server format, RS ports are read-only for now.
+  const gt2 = isGt2(deviceType);
   const status = useStatusStore.getState();
 
   if (!isConnected) return false;
@@ -104,16 +108,22 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
       const apn = settings.serverApn;
       const srv = settings.serverData;
 
-      progress('APN');
-      const apnResp = await send(buildApnWriteCmd(password, apn.name, apn.login, apn.password));
-      if (isPasswordError(apnResp)) { await callbacks.onPasswordError(); return false; }
-      if (isErrorResponse(apnResp)) errors.push(`APN: ${apnResp.trim()}`);
+      if (gt2) {
+        step++;
+      } else {
+        progress('APN');
+        const apnResp = await send(buildApnWriteCmd(password, apn.name, apn.login, apn.password));
+        if (isPasswordError(apnResp)) { await callbacks.onPasswordError(); return false; }
+        if (isErrorResponse(apnResp)) errors.push(`APN: ${apnResp.trim()}`);
+      }
 
       progress('SERVER1');
-      const srvResp = await send(buildServerWriteCmd(
-        password, 1, srv.ip, srv.port, deviceImei || 'IMEI',
-        srv.channel, srv.protocol,
-      ));
+      const srvResp = await send(gt2
+        ? buildGt2ServerWriteCmd(password, 1, srv.ip, srv.port, srv.channel)
+        : buildServerWriteCmd(
+          password, 1, srv.ip, srv.port, deviceImei || 'IMEI',
+          srv.channel, srv.protocol,
+        ));
       if (isPasswordError(srvResp)) { await callbacks.onPasswordError(); return false; }
       if (isErrorResponse(srvResp)) errors.push(`SERVER1: ${srvResp.trim()}`);
     } else {
@@ -210,7 +220,7 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
     } else { step++; }
 
     // ---- RS Interfaces ----
-    if (settings.rsPorts && settings.rsAvailable) {
+    if (settings.rsPorts && settings.rsAvailable && !gt2) {
       for (let i = 0; i < RS_PORTS.length; i++) {
         const name = RS_PORTS[i] as RsPortName;
         progress(name);

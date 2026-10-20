@@ -51,6 +51,7 @@ export interface Translations {
   'tab.server': string;
   'tab.protocol': string;
   'tab.wifi': string;
+  'tab.ethernet': string;
   'tab.gps': string;
   'tab.inputsOutputs': string;
   'tab.rsInterfaces': string;
@@ -76,6 +77,7 @@ export interface Translations {
   'status.statusPanel': string;
   'status.time': string;
   'status.power': string;
+  'status.battery': string;
   'status.latLon': string;
   'status.satellites': string;
   'status.gsmStatus': string;
@@ -122,6 +124,10 @@ export interface Translations {
   'server.protoIps': string;
   'server.protoGt9': string;
   'server.protoTsense': string;
+  'server.channelEth': string;
+  'server.channelEthGsm': string;
+  'server.channelEthWifi': string;
+  'server.protoGt2Slave': string;
   'server.reading': string;
   'server.saving': string;
   'server.readSuccess': string;
@@ -197,6 +203,9 @@ export interface Translations {
   'wifi.confirmDelete': string;
   'wifi.confirmDeleteAll': string;
   'wifi.ssidRequired': string;
+  'eth.settings': string;
+  'eth.notConnected': string;
+  'eth.notSupportedYet': string;
 
   // GPS tab
   'gps.panelGps': string;
@@ -269,6 +278,7 @@ export interface Translations {
   'rs.saveError': string;
   'rs.notConnected': string;
   'rs.waitHint': string;
+  'rs.gt2ReadOnly': string;
   'rs.deviceNone': string;
 
   // Diagnostics tab
@@ -293,6 +303,7 @@ export interface Translations {
   'diag.channelRs485': string;
   'diag.channelRs485a': string;
   'diag.channelRs485b': string;
+  'diag.channelBle': string;
   'diag.copied': string;
   'diag.saved': string;
   'diag.notConnected': string;
@@ -539,6 +550,9 @@ export interface Translations {
   'sys.defaultTitle': string;
   'sys.defaultDesc': string;
   'sys.defaultBtn': string;
+  'sys.bleUpdateTitle': string;
+  'sys.bleUpdateDesc': string;
+  'sys.bleUpdateBtn': string;
   'sys.erasureTitle': string;
   'sys.erasureDesc': string;
   'sys.erasureBtn': string;

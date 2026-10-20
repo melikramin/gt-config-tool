@@ -8,7 +8,19 @@ export const DEVICE_TYPES: Record<number, string> = {
   25: 'GT-1',
   26: 'GT-9 R8 (F4)',
   90: 'GT-7 (F1)',
+  95: 'GT-2',
 };
+
+/** HW_TYPE (first field of `$VER`) of the GT-2 router — limited settings set. */
+export const HW_TYPE_GT2 = 95;
+
+/**
+ * True when the connected device is a GT-2. `deviceType` is the raw HW_TYPE
+ * string from `$VER` kept in connectionStore ('' until detected).
+ */
+export function isGt2(deviceType: string): boolean {
+  return parseInt(deviceType, 10) === HW_TYPE_GT2;
+}
 
 export interface DeviceInfo {
   deviceType: number;

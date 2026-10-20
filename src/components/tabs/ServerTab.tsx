@@ -8,8 +8,11 @@ import {
   buildApnWriteCmd,
   buildServerReadCmd,
   buildServerWriteCmd,
+  buildGt2ServerWriteCmd,
+  SERVER_PROTO_GT2_SLAVE,
 } from '../../lib/commands';
 import { parseApn, parseServer, type ApnData, type ServerData } from '../../lib/parsers';
+import { isGt2 } from '../../types/device';
 
 // ---- Types ----
 
@@ -33,16 +36,25 @@ const INITIAL_STATE: ServerTabState = {
   server: { ...EMPTY_SERVER },
 };
 
+/**
+ * `gsm` — needs a GSM modem (not selectable on GT-2).
+ * `eth` — needs an Ethernet port (GT-2 only so far).
+ */
 const CHANNEL_OPTIONS = [
-  { value: '0', labelKey: 'server.channelGsm' as const },
-  { value: '1', labelKey: 'server.channelWifi' as const },
-  { value: '2', labelKey: 'server.channelGsmWifi' as const },
-  { value: '3', labelKey: 'server.channelWifiGsm' as const },
+  { value: '0', labelKey: 'server.channelGsm' as const, gsm: true, eth: false },
+  { value: '1', labelKey: 'server.channelWifi' as const, gsm: false, eth: false },
+  { value: '2', labelKey: 'server.channelGsmWifi' as const, gsm: true, eth: false },
+  { value: '3', labelKey: 'server.channelWifiGsm' as const, gsm: true, eth: false },
+  { value: '4', labelKey: 'server.channelEth' as const, gsm: false, eth: true },
+  { value: '5', labelKey: 'server.channelEthGsm' as const, gsm: true, eth: true },
+  { value: '6', labelKey: 'server.channelEthWifi' as const, gsm: false, eth: true },
 ];
 
+/** `gt2` — protocol for GT-2 only; GT-2 accepts nothing else. */
 const PROTOCOL_OPTIONS = [
-  { value: '0', labelKey: 'server.protoIps' as const },
-  { value: '1', labelKey: 'server.protoGt9' as const },
+  { value: '0', labelKey: 'server.protoIps' as const, gt2: false },
+  { value: '1', labelKey: 'server.protoGt9' as const, gt2: false },
+  { value: SERVER_PROTO_GT2_SLAVE, labelKey: 'server.protoGt2Slave' as const, gt2: true },
 ];
 
 // ---- Helpers ----
@@ -109,7 +121,7 @@ const InlineInput: FC<{
 const InlineSelect: FC<{
   label: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   onChange: (value: string) => void;
   disabled?: boolean;
   widthClass?: string;
@@ -123,7 +135,7 @@ const InlineSelect: FC<{
       className={`${widthClass} bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-xs text-zinc-200 disabled:opacity-50 focus:border-blue-500 focus:outline-none`}
     >
       {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>{opt.label}</option>
+        <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>
       ))}
     </select>
   </div>
@@ -155,6 +167,8 @@ const SelectField: FC<{
 
 export const ServerTab: FC = () => {
   const { password, isConnected, deviceImei, setConnected } = useConnectionStore();
+  // GT-2: no GSM (no APN, no IMEI), GT-2 slave protocol only.
+  const gt2 = useConnectionStore((s) => isGt2(s.deviceType));
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
@@ -203,13 +217,16 @@ export const ServerTab: FC = () => {
     setStatusMsg(t('server.reading'));
 
     try {
-      // Read APN
-      const apnResponse = await window.serial.sendCommand(buildApnReadCmd(password));
-      if (isPasswordError(apnResponse)) {
-        await handlePasswordError();
-        return;
+      // Read APN (GT-2 has no GSM modem)
+      let apnData: ApnData = { ...EMPTY_APN };
+      if (!gt2) {
+        const apnResponse = await window.serial.sendCommand(buildApnReadCmd(password));
+        if (isPasswordError(apnResponse)) {
+          await handlePasswordError();
+          return;
+        }
+        if (!isErrorResponse(apnResponse)) apnData = parseApn(apnResponse);
       }
-      const apnData = isErrorResponse(apnResponse) ? { ...EMPTY_APN } : parseApn(apnResponse);
 
       // Read SERVER1
       const srv1Response = await window.serial.sendCommand(buildServerReadCmd(password, 1));
@@ -239,7 +256,7 @@ export const ServerTab: FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [isConnected, password, handlePasswordError, t]);
+  }, [isConnected, gt2, password, handlePasswordError, t]);
 
   // Auto-read on connect only if store doesn't have data yet
   useEffect(() => {
@@ -254,8 +271,8 @@ export const ServerTab: FC = () => {
   const saveSettings = useCallback(async () => {
     if (!isConnected) return;
 
-    // IMEI is required for SERVER write
-    if (!deviceImei || deviceImei === '0') {
+    // IMEI is required for SERVER write (GT-2 sends no login/password)
+    if (!gt2 && (!deviceImei || deviceImei === '0')) {
       setStatusMsg(t('server.imeiNotReady'));
       return;
     }
@@ -265,17 +282,20 @@ export const ServerTab: FC = () => {
 
     try {
       // Write APN
-      const apnResp = await window.serial.sendCommand(
-        buildApnWriteCmd(password, state.apn.name, state.apn.login, state.apn.password),
-      );
-      if (isPasswordError(apnResp)) {
-        await handlePasswordError();
-        return;
+      if (!gt2) {
+        const apnResp = await window.serial.sendCommand(
+          buildApnWriteCmd(password, state.apn.name, state.apn.login, state.apn.password),
+        );
+        if (isPasswordError(apnResp)) {
+          await handlePasswordError();
+          return;
+        }
       }
 
       // Write SERVER1
-      const srv1Resp = await window.serial.sendCommand(
-        buildServerWriteCmd(password, 1, state.server.ip, state.server.port, deviceImei, state.server.channel, state.server.protocol),
+      const srv1Resp = await window.serial.sendCommand(gt2
+        ? buildGt2ServerWriteCmd(password, 1, state.server.ip, state.server.port, state.server.channel)
+        : buildServerWriteCmd(password, 1, state.server.ip, state.server.port, deviceImei, state.server.channel, state.server.protocol),
       );
       if (isPasswordError(srv1Resp)) {
         await handlePasswordError();
@@ -295,7 +315,7 @@ export const ServerTab: FC = () => {
         ip: state.server.ip,
         port: state.server.port,
         channel: state.server.channel,
-        protocol: state.server.protocol,
+        protocol: gt2 ? SERVER_PROTO_GT2_SLAVE : state.server.protocol,
       });
       setStatusMsg(t('server.saveSuccess'));
     } catch (err) {
@@ -303,7 +323,7 @@ export const ServerTab: FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [isConnected, password, deviceImei, state, handlePasswordError, t]);
+  }, [isConnected, gt2, password, deviceImei, state, handlePasswordError, t]);
 
   // ---- State updaters ----
 
@@ -317,8 +337,14 @@ export const ServerTab: FC = () => {
 
   const busy = loading || saving;
 
-  const channelOptions = CHANNEL_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
-  const protocolOptions = PROTOCOL_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
+  const channelOptions = CHANNEL_OPTIONS.map((o) => ({
+    value: o.value, label: t(o.labelKey), disabled: gt2 ? o.gsm : o.eth,
+  }));
+  const protocolOptions = PROTOCOL_OPTIONS.map((o) => ({
+    value: o.value, label: t(o.labelKey), disabled: gt2 !== o.gt2,
+  }));
+  // GT-2 always writes the GT-2 slave protocol, whatever the device reported.
+  const protocolValue = gt2 ? SERVER_PROTO_GT2_SLAVE : state.server.protocol;
 
   // ---- Render ----
 
@@ -333,7 +359,8 @@ export const ServerTab: FC = () => {
 
   return (
     <div className="p-4 space-y-4 max-w-3xl">
-      {/* APN Panel — lighter background to distinguish from server */}
+      {/* APN Panel — lighter background to distinguish from server. GT-2 has no GSM. */}
+      {!gt2 && (
       <Panel title={t('server.apnSettings')} className="bg-zinc-900/60 border-zinc-600">
         <InputField
           label={t('server.apnName')}
@@ -357,6 +384,7 @@ export const ServerTab: FC = () => {
           placeholder="mts"
         />
       </Panel>
+      )}
 
       {/* Server 1 & Server 2 side by side */}
       <div className="flex gap-3">
@@ -386,11 +414,11 @@ export const ServerTab: FC = () => {
               options={channelOptions}
               onChange={(v) => updateServer('channel', v)}
               disabled={busy}
-              widthClass="w-28"
+              widthClass="w-36"
             />
             <InlineSelect
               label={t('server.protocol')}
-              value={state.server.protocol}
+              value={protocolValue}
               options={protocolOptions}
               onChange={(v) => updateServer('protocol', v)}
               disabled={busy}

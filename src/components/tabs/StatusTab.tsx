@@ -8,6 +8,7 @@ import {
   buildInitCommands,
   buildGsmCommand,
   buildPollingCommands,
+  buildGt2PollingCommands,
   buildOutputCmd,
   buildAddTagCmd,
   buildDateReadCmd,
@@ -50,6 +51,7 @@ import {
   type EncoderData,
   type TagsData,
 } from '../../lib/parsers';
+import { isGt2 } from '../../types/device';
 
 // ---- State shape ----
 
@@ -75,7 +77,7 @@ const INITIAL_STATE: StatusState = {
   gsm: { status: '', rssi: '', imei: '' },
   ver: { hardwareType: '', firmwareVersion: '', releaseDate: '', deviceName: '' },
   date: { date: '', time: '' },
-  rep: { extBattery: '', latitude: '', longitude: '', satellites: '', gsmStatus: '', gsmRssi: '', wifiStatus: '', wifiRssi: '', intTemp: '', lastTagId: '' },
+  rep: { model: '', extBattery: '', intBattery: '', latitude: '', longitude: '', satellites: '', gsmStatus: '', gsmRssi: '', wifiStatus: '', wifiRssi: '', intTemp: '', lastTagId: '' },
   fuel: { pumps: [{ status: '', dose: '', total: '' }, { status: '', dose: '', total: '' }, { status: '', dose: '', total: '' }, { status: '', dose: '', total: '' }] },
   inputs: { count: 0, inputs: [] },
   outputs: { count: 0, outputs: [] },
@@ -121,10 +123,26 @@ const Panel: FC<{ title: string; children: React.ReactNode; className?: string }
   </div>
 );
 
+/** Millivolts → "12.18 В"; red when below `lowMv`. */
+const VoltageField: FC<{ label: string; mv: string; lowMv?: number }> = ({ label, mv, lowMv }) => {
+  const n = parseInt(mv, 10);
+  const hasValue = Number.isFinite(n);
+  const low = hasValue && lowMv !== undefined && n < lowMv;
+  return (
+    <div className="flex items-center justify-between py-0.5">
+      <span className="text-zinc-400 text-xs">{label}</span>
+      <span className={`text-xs font-mono ${low ? 'text-red-500 font-semibold' : 'text-zinc-200'}`}>
+        {hasValue ? `${(n / 1000).toFixed(2)} В` : '—'}
+      </span>
+    </div>
+  );
+};
+
 // ---- Main component ----
 
 export const StatusTab: FC = () => {
-  const { password, isConnected, setConnected, setDeviceImei } = useConnectionStore();
+  const { password, isConnected, setConnected, setDeviceImei, setDeviceType } = useConnectionStore();
+  const gt2 = useConnectionStore((s) => isGt2(s.deviceType));
   const { setLastError, setShowPasswordError } = useStatusStore();
   const isReadingAll = useSettingsStore((s) => s.isReadingAll);
   const isWritingAll = useSettingsStore((s) => s.isWritingAll);
@@ -182,6 +200,10 @@ export const StatusTab: FC = () => {
       // Returns true if init succeeded, false if device looks stuck.
       const cmds = buildInitCommands(password);
       let failures = 0;
+      // DEV is sent before VER, so whether its failure matters (GT-2 may not
+      // answer DEV) is only known after VER — decide once the loop is done.
+      let devFailed = false;
+      let gt2Detected = false;
       for (const cmd of cmds) {
         if (cancelled) return true;
         try {
@@ -193,11 +215,15 @@ export const StatusTab: FC = () => {
           const cmdName = cmd.replace(/^\$[^;]*;/, '').split(';')[0].toUpperCase();
           if (cmdName === 'DEV') {
             const dev = parseDev(response);
-            if (!dev.deviceName && !dev.deviceId) failures++;
+            if (!dev.deviceName && !dev.deviceId) devFailed = true;
             setState((prev) => ({ ...prev, dev }));
           } else if (cmdName === 'VER') {
             const ver = parseVer(response);
             if (!ver.firmwareVersion) failures++;
+            if (ver.hardwareType) {
+              setDeviceType(ver.hardwareType);
+              gt2Detected = isGt2(ver.hardwareType);
+            }
             setState((prev) => ({ ...prev, ver }));
           }
         } catch (err) {
@@ -205,6 +231,7 @@ export const StatusTab: FC = () => {
           failures++;
         }
       }
+      if (devFailed && !gt2Detected) failures++;
       return failures === 0;
     };
 
@@ -278,13 +305,14 @@ export const StatusTab: FC = () => {
     }
   }, [addDebugLine, setDeviceImei]);
 
-  usePolling(gsmCommands, isConnected && initDone && !imeiLoaded, handleGsmResponse, 1000, 50, handlePasswordError);
+  // GT-2 has no GSM modem — no IMEI to wait for.
+  usePolling(gsmCommands, isConnected && initDone && !imeiLoaded && !gt2, handleGsmResponse, 1000, 50, handlePasswordError);
 
   // --- One-shot: load pump types so Status pump panel can show
   // active vs. inactive (PUMPn;0 = inactive). Skipped if settings
   // already populated by Pumps tab or "Read all". ---
   useEffect(() => {
-    if (!isConnected || !initDone) return;
+    if (!isConnected || !initDone || gt2) return;
     if (storePumps !== null) return;
     let cancelled = false;
     (async () => {
@@ -306,7 +334,7 @@ export const StatusTab: FC = () => {
       if (!cancelled) setPumpsSettings(pumps);
     })();
     return () => { cancelled = true; };
-  }, [isConnected, initDone, storePumps, password, addDebugLine, setPumpsSettings]);
+  }, [isConnected, initDone, gt2, storePumps, password, addDebugLine, setPumpsSettings]);
 
   // --- Phase 3: Cyclic polling for everything else ---
   // Filter LLS polling to enabled sensors once the FLS settings are loaded.
@@ -317,8 +345,8 @@ export const StatusTab: FC = () => {
     [flsSensors],
   );
   const pollingCommands = useMemo(
-    () => buildPollingCommands(password, enabledLls ?? undefined),
-    [password, enabledLls],
+    () => (gt2 ? buildGt2PollingCommands(password) : buildPollingCommands(password, enabledLls ?? undefined)),
+    [gt2, password, enabledLls],
   );
 
   const handleResponse = useCallback((_cmd: string, response: string) => {
@@ -398,6 +426,30 @@ export const StatusTab: FC = () => {
 
   const inputTypeMap = locale === 'ru' ? INPUT_TYPES_RU : INPUT_TYPES;
 
+  // GT-2 router: no GSM/GNSS/pumps/IO/sensors/tags — identification + power only.
+  if (gt2) {
+    return (
+      <div className="p-3 overflow-auto h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+          {/* GT-2 has no serial number field */}
+          <Panel title={t('status.identification')}>
+            <Field
+              label={t('status.firmware')}
+              value={ver.firmwareVersion && ver.releaseDate ? `${ver.firmwareVersion} — ${ver.releaseDate}` : ''}
+            />
+            <Field label={t('status.device')} value={rep.model || ver.deviceName} />
+          </Panel>
+
+          <Panel title={t('status.statusPanel')}>
+            <VoltageField label={t('status.power')} mv={rep.extBattery} lowMv={11000} />
+            <VoltageField label={t('status.battery')} mv={rep.intBattery} />
+            <Field label={t('status.intTemp')} value={rep.intTemp ? `${rep.intTemp} °C` : ''} />
+          </Panel>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 overflow-auto h-full">
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -419,22 +471,7 @@ export const StatusTab: FC = () => {
             label={t('status.time')}
             value={dt.date && dt.time ? `${dt.date} ${dt.time}` : ''}
           />
-          {(() => {
-            const mv = parseInt(rep.extBattery, 10);
-            const hasValue = Number.isFinite(mv);
-            const volts = hasValue ? (mv / 1000).toFixed(2) : '';
-            const low = hasValue && mv < 11000;
-            return (
-              <div className="flex items-center justify-between py-0.5">
-                <span className="text-zinc-400 text-xs">{t('status.power')}</span>
-                <span
-                  className={`text-xs font-mono ${low ? 'text-red-500 font-semibold' : 'text-zinc-200'}`}
-                >
-                  {hasValue ? `${volts} В` : '—'}
-                </span>
-              </div>
-            );
-          })()}
+          <VoltageField label={t('status.power')} mv={rep.extBattery} lowMv={11000} />
           <div className="flex items-center justify-between py-0.5">
             <span className="text-zinc-400 text-xs">{t('status.latLon')}</span>
             <span className="text-zinc-200 text-xs font-mono">

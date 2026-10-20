@@ -11,9 +11,11 @@
 
 import { useSettingsStore } from '../stores/settingsStore';
 import { useConnectionStore } from '../stores/connectionStore';
+import { isGt2 } from '../types/device';
 import {
   buildApnWriteCmd,
   buildServerWriteCmd,
+  buildGt2ServerWriteCmd,
   buildPrset20SetCmd,
   buildPrset21SetCmd,
   buildWifiNetWriteCmd,
@@ -104,7 +106,8 @@ import {
  */
 export function buildTemplateCommands(): string[] | null {
   const settings = useSettingsStore.getState();
-  const { password, deviceImei } = useConnectionStore.getState();
+  const { password, deviceImei, deviceType } = useConnectionStore.getState();
+  const gt2 = isGt2(deviceType);
 
   // Must have at least some data
   if (!settings.serverApn && !settings.gpsFilter && !settings.protoBuf20) {
@@ -117,11 +120,16 @@ export function buildTemplateCommands(): string[] | null {
   if (settings.serverApn && settings.serverData) {
     const apn = settings.serverApn;
     const srv = settings.serverData;
-    lines.push(buildApnWriteCmd(password, apn.name, apn.login, apn.password));
-    lines.push(buildServerWriteCmd(
-      password, 1, srv.ip, srv.port, deviceImei || 'IMEI',
-      srv.channel, srv.protocol,
-    ));
+    if (gt2) {
+      // GT-2: no GSM → no APN; own SERVER format.
+      lines.push(buildGt2ServerWriteCmd(password, 1, srv.ip, srv.port, srv.channel));
+    } else {
+      lines.push(buildApnWriteCmd(password, apn.name, apn.login, apn.password));
+      lines.push(buildServerWriteCmd(
+        password, 1, srv.ip, srv.port, deviceImei || 'IMEI',
+        srv.channel, srv.protocol,
+      ));
+    }
   }
 
   // ---- Protocol ----
@@ -173,8 +181,8 @@ export function buildTemplateCommands(): string[] | null {
     lines.push(buildEncoderWriteCmd(password, 2, settings.encoder2));
   }
 
-  // ---- RS Interfaces ----
-  if (settings.rsPorts && settings.rsAvailable) {
+  // ---- RS Interfaces (read-only on GT-2 for now) ----
+  if (settings.rsPorts && settings.rsAvailable && !gt2) {
     for (let i = 0; i < RS_PORTS.length; i++) {
       if (!settings.rsAvailable[i]) continue;
       const name = RS_PORTS[i] as RsPortName;

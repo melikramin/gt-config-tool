@@ -7,6 +7,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useStatusStore } from '../stores/statusStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import {
+  buildCmd,
   buildApnReadCmd,
   buildServerReadCmd,
   buildPrset20GetCmd,
@@ -78,6 +79,7 @@ import {
   FLS_MAX_SENSORS,
   WIFI_MAX_NETWORKS,
   RS_PORTS,
+  GT2_RS_PORTS,
   type RsPortName,
   type InputParams,
   type RsPortParams,
@@ -91,8 +93,11 @@ import {
   parseServer,
   parseWifiCount,
   parseWifiNetwork,
+  parseVer,
+  type ServerData,
   type WifiNetworkData,
 } from './parsers';
+import { isGt2 } from '../types/device';
 
 function isErrorResponse(r: string): boolean {
   const t = r.trim();
@@ -108,6 +113,12 @@ function isFormatError(r: string): boolean {
 }
 
 const MAX_INPUTS = 6;
+
+const DEFAULT_SERVER: ServerData = {
+  serverProp: '0F', protoProp: '01', ip: '', port: '', login: '', pass: '',
+  timeout1: '10', timeout2: '0', timeout3: '120', timeout4: '30',
+  ipProto: '1', channel: '0', protocol: '1',
+};
 
 interface ReadAllCallbacks {
   onPasswordError: () => Promise<void>;
@@ -125,6 +136,22 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
   const status = useStatusStore.getState();
 
   if (!isConnected) return false;
+
+  // The tab set and command set depend on the model — make sure it is known.
+  let { deviceType } = useConnectionStore.getState();
+  if (!deviceType) {
+    try {
+      const verResp = await window.serial.sendCommand(buildCmd(password, 'VER'));
+      if (isPasswordError(verResp)) { await callbacks.onPasswordError(); return false; }
+      if (!isErrorResponse(verResp)) {
+        deviceType = parseVer(verResp).hardwareType;
+        if (deviceType) useConnectionStore.getState().setDeviceType(deviceType);
+      }
+    } catch {
+      // Fall through with the full GT-9 command set.
+    }
+  }
+  if (isGt2(deviceType)) return readGt2Settings(password, callbacks);
 
   settings.setIsReadingAll(true);
 
@@ -152,13 +179,7 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
     progress('SERVER1');
     const srv1Resp = await window.serial.sendCommand(buildServerReadCmd(password, 1));
     if (isPasswordError(srv1Resp)) { await callbacks.onPasswordError(); return false; }
-    const serverData = isErrorResponse(srv1Resp)
-      ? {
-          serverProp: '0F', protoProp: '01', ip: '', port: '', login: '', pass: '',
-          timeout1: '10', timeout2: '0', timeout3: '120', timeout4: '30',
-          ipProto: '1', channel: '0', protocol: '1',
-        }
-      : parseServer(srv1Resp);
+    const serverData = isErrorResponse(srv1Resp) ? { ...DEFAULT_SERVER } : parseServer(srv1Resp);
 
     settings.setServerSettings(apnData, serverData);
 
@@ -398,6 +419,80 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
       cameras[i] = parsed ? parsed.params : { ...EMPTY_CAMERA };
     }
     settings.setCameras(cameras);
+
+    return true;
+  } catch (err) {
+    status.setLastError(`Read error: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  } finally {
+    settings.setIsReadingAll(false);
+    status.clearProgress();
+  }
+}
+
+/**
+ * GT-2 (router): only SERVER1, WiFi networks and RS232/RS485 exist.
+ * No APN — GT-2 has no GSM modem; an empty APN is stored so the Server tab
+ * and "write all" treat the server settings as loaded.
+ */
+async function readGt2Settings(password: string, callbacks: ReadAllCallbacks): Promise<boolean> {
+  const settings = useSettingsStore.getState();
+  const status = useStatusStore.getState();
+
+  settings.setIsReadingAll(true);
+
+  // SERVER1 + WIFINET + up to WIFI_MAX_NETWORKS + RS232/RS485
+  const TOTAL_STEPS = 2 + WIFI_MAX_NETWORKS + GT2_RS_PORTS.size;
+  let step = 0;
+  const progress = (text: string) => {
+    step++;
+    status.setProgress(Math.round((step / TOTAL_STEPS) * 100), text);
+    callbacks.onStep?.(text);
+  };
+
+  try {
+    // ---- Server ----
+    progress('SERVER1');
+    const srv1Resp = await window.serial.sendCommand(buildServerReadCmd(password, 1));
+    if (isPasswordError(srv1Resp)) { await callbacks.onPasswordError(); return false; }
+    const serverData = isErrorResponse(srv1Resp) ? { ...DEFAULT_SERVER } : parseServer(srv1Resp);
+    settings.setServerSettings({ name: '', login: '', password: '' }, serverData);
+
+    // ---- WiFi ----
+    progress('WIFINET');
+    const wifiCountResp = await window.serial.sendCommand(buildWifiCountCmd(password));
+    if (isPasswordError(wifiCountResp)) { await callbacks.onPasswordError(); return false; }
+    const wifiCount = isErrorResponse(wifiCountResp) ? 0 : parseWifiCount(wifiCountResp);
+    const wifiNetworks: WifiNetworkData[] = [];
+    const maxWifi = Math.min(wifiCount, WIFI_MAX_NETWORKS);
+    for (let i = 1; i <= maxWifi; i++) {
+      progress(`WIFINET${i}`);
+      const resp = await window.serial.sendCommand(buildWifiNetReadCmd(password, i));
+      if (isPasswordError(resp)) { await callbacks.onPasswordError(); return false; }
+      if (!isErrorResponse(resp)) wifiNetworks.push(parseWifiNetwork(resp));
+    }
+    step += (WIFI_MAX_NETWORKS - maxWifi);
+    settings.setWifiSettings(wifiNetworks);
+
+    // ---- RS Interfaces (RS232 + RS485 only; A/B ports don't exist) ----
+    const rsPorts: RsPortParams[] = [];
+    const rsAvailable: boolean[] = [];
+    for (let i = 0; i < RS_PORTS.length; i++) {
+      const name = RS_PORTS[i] as RsPortName;
+      if (!GT2_RS_PORTS.has(name)) {
+        rsPorts.push({ ...EMPTY_RS_PORT, extra: [] });
+        rsAvailable.push(false);
+        continue;
+      }
+      progress(name);
+      const resp = await window.serial.sendCommand(buildRsReadCmd(password, name));
+      if (isPasswordError(resp)) { await callbacks.onPasswordError(); return false; }
+      const absent = isFormatError(resp);
+      const p = isErrorResponse(resp) ? null : parseRsResponse(resp, name);
+      rsPorts.push(p || { ...EMPTY_RS_PORT, extra: [] });
+      rsAvailable.push(!absent);
+    }
+    settings.setRsSettings(rsPorts, rsAvailable);
 
     return true;
   } catch (err) {

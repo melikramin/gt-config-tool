@@ -191,7 +191,11 @@ function nmeaToDecimal(raw: string, hemi: string, degDigits: 2 | 3): string {
 }
 
 export interface RepData {
+  /** Model name from field [0], e.g. "GT2X" (used as the device name for GT-2). */
+  model: string;
   extBattery: string;
+  /** Internal (backup) battery, mV. */
+  intBattery: string;
   latitude: string;       // decimal degrees, signed (e.g. "55.666077")
   longitude: string;      // decimal degrees, signed
   satellites: string;
@@ -216,7 +220,9 @@ export function parseRep(raw: string): RepData {
   const satellites = Number.isFinite(satN) && satN >= 0 && satN <= 50 ? String(satN) : '';
 
   return {
+    model: safeField(f, 0),
     extBattery: safeField(f, len - 10),
+    intBattery: safeField(f, len - 9),
     latitude,
     longitude,
     satellites,

@@ -124,6 +124,14 @@ export function buildPollingCommands(password: string, enabledLls?: boolean[]): 
   return cmds;
 }
 
+/**
+ * Cyclic polling for GT-2: it has no GSM/GNSS/pumps/IO/LLS/tags — only REP
+ * (power, internal battery, internal temperature, model name).
+ */
+export function buildGt2PollingCommands(password: string): string[] {
+  return [buildCmd(password, 'REP')];
+}
+
 /** Build command to toggle output ON/OFF: $PASS;OUTn;;value */
 export function buildOutputCmd(password: string, index: number, on: boolean): string {
   return `$${password};OUT${index};;${on ? '1' : '0'}`;
@@ -167,8 +175,8 @@ export const SERVER_RESP_TOUT = '10';
  * Write server settings:
  * $PASS;SERVERn;SET;0F;01;IP;PORT;IMEI;IMEI;10;0;120;10;1;CHANNEL;PROTOCOL
  * Hidden fields: SERVER_PROP=0F, PROTO_PROP=01, LOGIN/PASS=IMEI, timeouts, IP_PROTO=1.
- * CHANNEL: 0=GSM, 1=WiFi, 2=GSM+WiFi, 3=WiFi+GSM
- * PROTOCOL: 0=IPS, 1=GT9
+ * CHANNEL: 0=GSM, 1=WiFi, 2=GSM+WiFi, 3=WiFi+GSM, 4=Ethernet, 5=Ethernet+GSM, 6=Ethernet+WiFi
+ * PROTOCOL: 0=IPS, 1=GT9 (6=GT2 slave is GT-2 only — see buildGt2ServerWriteCmd)
  */
 export function buildServerWriteCmd(
   password: string,
@@ -184,6 +192,29 @@ export function buildServerWriteCmd(
     imei, imei,
     SERVER_LOGIN_TOUT, SERVER_TRANSFER_TOUT, SERVER_PING_TOUT, SERVER_RESP_TOUT,
     '1', channel, protocol,
+  ]);
+}
+
+/** Server PROTOCOL value of the GT-2 slave protocol (the only one GT-2 accepts). */
+export const SERVER_PROTO_GT2_SLAVE = '6';
+
+/**
+ * Write server settings in the GT-2 format:
+ * $PASS;SERVERn;SET;07;00;IP;PORT;;;;0;10;5;1;CHANNEL;6;1
+ * Same field layout as the GT-9 command (CHANNEL/PROTOCOL stay at fields 11/12),
+ * no login/password (GT-2 has no IMEI), own timeouts and one trailing field.
+ */
+export function buildGt2ServerWriteCmd(
+  password: string,
+  index: number,
+  ip: string,
+  port: string,
+  channel: string,
+): string {
+  return buildCmd(password, `SERVER${index}`, [
+    'SET', '07', '00', ip, port,
+    '', '', '', '0', '10', '5',
+    '1', channel, SERVER_PROTO_GT2_SLAVE, '1',
   ]);
 }
 
@@ -577,6 +608,9 @@ export function parseInCount(raw: string): number {
 export const RS_PORTS = ['RS232', 'RS232A', 'RS232B', 'RS485', 'RS485A', 'RS485B'] as const;
 export type RsPortName = (typeof RS_PORTS)[number];
 
+/** GT-2 has only RS232 and RS485 — the A/B ports are not queried at all. */
+export const GT2_RS_PORTS: ReadonlySet<RsPortName> = new Set<RsPortName>(['RS232', 'RS485']);
+
 /** Timeout for RS port writes — device can take several seconds to respond. */
 export const RS_WRITE_TIMEOUT_MS = 10_000;
 
@@ -646,6 +680,7 @@ export const RS_DEVICE_TYPES: Array<{ value: string; label: string }> = [
   { value: '39',  label: 'MCR' },
   { value: '40',  label: 'EAGLE' },
   { value: '41',  label: 'UNIPUMP' },
+  { value: '51',  label: 'GT2 Slave' },
 ];
 
 /**

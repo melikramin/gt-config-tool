@@ -1,12 +1,13 @@
 import { type FC, useState, useRef, useCallback, useEffect } from 'react';
 import { Toolbar } from './components/layout/Toolbar';
-import { Sidebar, type TabId } from './components/layout/Sidebar';
+import { Sidebar, visibleTabs, type TabId } from './components/layout/Sidebar';
 import { StatusBar } from './components/layout/StatusBar';
 import { StatusTab } from './components/tabs/StatusTab';
 import { DiagnosticsTab } from './components/tabs/DiagnosticsTab';
 import { ServerTab } from './components/tabs/ServerTab';
 import { ProtocolTab } from './components/tabs/ProtocolTab';
 import { WifiTab } from './components/tabs/WifiTab';
+import { EthernetTab } from './components/tabs/EthernetTab';
 import { GpsTab } from './components/tabs/GpsTab';
 import { InputsOutputsTab } from './components/tabs/InputsOutputsTab';
 import { RsInterfacesTab } from './components/tabs/RsInterfacesTab';
@@ -30,6 +31,7 @@ const TAB_COMPONENTS: Record<TabId, FC> = {
   server: ServerTab,
   protocol: ProtocolTab,
   wifi: WifiTab,
+  ethernet: EthernetTab,
   gps: GpsTab,
   'inputs-outputs': InputsOutputsTab,
   'rs-interfaces': RsInterfacesTab,
@@ -46,7 +48,7 @@ const TAB_COMPONENTS: Record<TabId, FC> = {
 const App: FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('status');
   const prevTabRef = useRef<TabId>('status');
-  const { password, isConnected } = useConnectionStore();
+  const { password, isConnected, deviceType, setDeviceType } = useConnectionStore();
   const { showPasswordError, setShowPasswordError, isSystemBusy } = useStatusStore();
   const { t } = useI18n();
 
@@ -58,8 +60,15 @@ const App: FC = () => {
       useDiagnosticsStore.getState().clearEnabledChannels();
       // Drop the cached keys list — it belongs to the device we just left.
       useTagsStore.getState().reset();
+      // The next device may be a different model — detect it again on connect.
+      setDeviceType('');
     }
-  }, [isConnected, isSystemBusy]);
+  }, [isConnected, isSystemBusy, setDeviceType]);
+
+  // Device detected (e.g. GT-2) with a narrower tab set — leave a tab it doesn't have.
+  useEffect(() => {
+    if (!visibleTabs(deviceType).includes(activeTab)) setActiveTab('status');
+  }, [deviceType, activeTab]);
 
   const handleTabChange = useCallback((tab: TabId) => {
     // When leaving diagnostics tab, disable all logs to avoid interference

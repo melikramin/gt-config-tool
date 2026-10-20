@@ -10,6 +10,7 @@ import {
   RS_STOP_BITS,
   RS_PARITY,
   RS_DEVICE_TYPES,
+  GT2_RS_PORTS,
   RS_DEVICE_DEFAULTS,
   RS_WRITE_TIMEOUT_MS,
   EMPTY_RS_PORT,
@@ -19,6 +20,7 @@ import {
   type RsPortParams,
   type RsPortName,
 } from '../../lib/commands';
+import { isGt2 } from '../../types/device';
 
 const FREE_RETRY_COUNT = 2;      // retries on DE when clearing a busy port
 const FREE_RETRY_DELAY_MS = 800; // wait between retries
@@ -59,6 +61,8 @@ const Select: FC<{
 
 export const RsInterfacesTab: FC = () => {
   const { password, isConnected, setConnected } = useConnectionStore();
+  // GT-2: RS232/RS485 are shown read-only for now; both ports may share a type.
+  const gt2 = useConnectionStore((s) => isGt2(s.deviceType));
   const { setLastError, setShowPasswordError } = useStatusStore();
   const { t } = useI18n();
 
@@ -107,6 +111,12 @@ export const RsInterfacesTab: FC = () => {
       const avail: boolean[] = [];
       for (let i = 0; i < RS_PORTS.length; i++) {
         const name = RS_PORTS[i] as RsPortName;
+        if (gt2 && !GT2_RS_PORTS.has(name)) {
+          // GT-2 has no A/B ports — don't query them.
+          next.push({ ...EMPTY_RS_PORT, extra: [] });
+          avail.push(false);
+          continue;
+        }
         const resp = await window.serial.sendCommand(buildRsReadCmd(password, name));
         if (isPasswordError(resp)) { await handlePasswordError(); return; }
         if (isFormatError(resp)) {
@@ -130,7 +140,7 @@ export const RsInterfacesTab: FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [isConnected, password, handlePasswordError, t]);
+  }, [isConnected, gt2, password, handlePasswordError, t]);
 
   useEffect(() => {
     if (isConnected && !useSettingsStore.getState().rsPorts) readAll();
@@ -208,7 +218,7 @@ export const RsInterfacesTab: FC = () => {
     for (let i = 0; i < ports.length; i++) {
       const s = new Set<string>();
       for (let j = 0; j < ports.length; j++) {
-        if (j === i) continue;
+        if (j === i || gt2) continue;
         if (!available[j]) continue;
         const v = ports[j].deviceType;
         if (v && v !== FREE_DEVICE_TYPE) s.add(v);
@@ -216,9 +226,10 @@ export const RsInterfacesTab: FC = () => {
       sets.push(s);
     }
     return sets;
-  }, [ports, available]);
+  }, [ports, available, gt2]);
 
   const busy = loading || saving;
+  const readOnly = busy || gt2;
 
   if (!isConnected) {
     return (
@@ -260,7 +271,7 @@ export const RsInterfacesTab: FC = () => {
                       ? t('rs.deviceNone')
                       : `${opt.value} — ${opt.label}`,
                   }));
-                const paramsDisabled = busy || p.deviceType === FREE_DEVICE_TYPE;
+                const paramsDisabled = readOnly || p.deviceType === FREE_DEVICE_TYPE;
                 return (
                   <tr key={RS_PORTS[idx]} className="align-middle">
                     <td className="pr-3 py-1 text-zinc-300 font-mono">{RS_PORTS[idx]}</td>
@@ -268,7 +279,7 @@ export const RsInterfacesTab: FC = () => {
                       <Select
                         value={p.deviceType}
                         onChange={(v) => updatePort(idx, 'deviceType', v)}
-                        disabled={busy}
+                        disabled={readOnly}
                         options={deviceOptions}
                         className="w-44"
                       />
@@ -325,6 +336,7 @@ export const RsInterfacesTab: FC = () => {
         >
           {loading ? t('rs.reading') : t('common.read')}
         </button>
+        {!gt2 && (
         <button
           onClick={saveAll}
           disabled={busy}
@@ -332,6 +344,7 @@ export const RsInterfacesTab: FC = () => {
         >
           {saving ? t('rs.saving') : t('common.save')}
         </button>
+        )}
         {saving && (
           <span className="inline-block h-3 w-3 rounded-full border-2 border-zinc-500 border-t-blue-400 animate-spin" />
         )}
@@ -339,6 +352,9 @@ export const RsInterfacesTab: FC = () => {
       </div>
       {saving && (
         <p className="text-[11px] text-amber-400/80">{t('rs.waitHint')}</p>
+      )}
+      {gt2 && (
+        <p className="text-[11px] text-zinc-500">{t('rs.gt2ReadOnly')}</p>
       )}
     </div>
   );
