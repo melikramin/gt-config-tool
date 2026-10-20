@@ -16,6 +16,8 @@ export default defineConfig({
     APP_VERSION: JSON.stringify(pkg.version),
   },
   server: {
+    // Pin IPv4 so wait-on / Electron (127.0.0.1:5173) always reach the dev server.
+    host: '127.0.0.1',
     port: 5173,
     strictPort: true,
   },

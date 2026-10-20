@@ -17,7 +17,8 @@ const serialManager = new SerialManager();
 
 const isDev = !app.isPackaged;
 
-const DEV_URL = 'http://localhost:5173';
+// Explicit IPv4: `localhost` may resolve to ::1 while the dev server listens on IPv4 (or vice versa).
+const DEV_URL = 'http://127.0.0.1:5173';
 
 async function loadDevUrl(win: BrowserWindow, retries = 10): Promise<void> {
   for (let i = 0; i < retries; i++) {
