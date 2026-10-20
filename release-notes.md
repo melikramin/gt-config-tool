@@ -1,13 +1,14 @@
-Release 2.1.8 — GSM analyzer: modem reboots, socket errors, LTE search
+Release 2.1.9 — GT-2 router support
 
 What's new
-• Diagnostics tab — the GSM log analyzer now explains modem reboots. RDY and +CFUN: 1 are recognized as "modem booted and ready" and "radio module on", so a restart in the middle of a log is obvious instead of looking like random noise.
-• Diagnostics tab — modem time (+CCLK) is now shown, and an unsynchronized clock is called out as a warning. A modem reporting year 04 or 80 has not received time from the network yet — a common reason a device looks alive while its records land with wrong timestamps.
-• Diagnostics tab — full coverage of Quectel socket open errors: server unreachable (566), operation busy (568), operation timeout (569), PDP context broken down (570), APN not configured (573) and port busy (574). Previously these codes went by unexplained.
-• Diagnostics tab — the missing LTE registration states: searching for network (+CEREG: 0,2), unknown state (0,4) and registered in roaming (0,5). A long LTE search is now flagged the same way a long 2G/3G search already was.
+• GT-2 router support. The configurator recognizes the GT-2 by its hardware type and shows only the settings this device has: Status, Diagnostics, Server, WiFi, Ethernet, RS Interfaces and System.
+• Status tab (GT-2) — firmware version, device model, supply voltage, internal battery and internal temperature.
+• Server settings — new connection channels: Ethernet, Ethernet + GSM and Ethernet + WiFi, and the new GT2 Slave protocol. On GT-2, GSM channels and the APN block are unavailable (the device has no GSM modem) and only the GT2 Slave protocol can be selected.
+• WiFi settings work on GT-2 exactly as on GT-9.
+• Ethernet tab (GT-2) — DHCP or static IP settings. Reading and saving will be enabled as soon as the firmware supports the Ethernet command.
+• RS Interfaces (GT-2) — RS232 and RS485 are shown with their current settings (GT2 Slave device type). Editing is not available yet.
+• Diagnostics (GT-2) — RS232, RS485 and the new Bluetooth log channel.
+• System tab (GT-2) — firmware update from a file, factory reset, settings reset, and the new BLE module update: the device switches its Bluetooth module into update mode and keeps working while the update is done from a phone.
 
 Improvements
-• Server settings — the server response timeout sent with the connection settings is now 10 seconds instead of 30, so the device notices a dead link and reconnects faster.
-
-Bug fixes
-• Diagnostics tab — +QIOPEN: <id>,567 was explained incorrectly as "socket open aborted/timeout". Per the Quectel manual 567 means the socket has been closed, and in practice it arrives right after the firmware itself closed the socket by its own timeout. It is now shown as a warning with the correct meaning, so it is no longer mistaken for a connection failure.
+• Server settings — on GT-9, GT-7 and other devices without an Ethernet port, the Ethernet channels are shown but cannot be selected.
