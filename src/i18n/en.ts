@@ -319,6 +319,7 @@ export const en: Translations = {
   'diag.channelRs485a': 'RS485A',
   'diag.channelRs485b': 'RS485B',
   'diag.channelBle': 'Bluetooth',
+  'diag.channelEth': 'Ethernet',
   'diag.copied': 'Copied to clipboard',
   'diag.saved': 'Log saved',
   'diag.notConnected': 'Not connected',

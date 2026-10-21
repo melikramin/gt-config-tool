@@ -6,7 +6,7 @@ import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 import { analyzeGsmLog, hintText, withGsm, withGps } from '../../diagnostics/gsmAnalyzer';
 import type { AnalyzeMode, Severity } from '../../diagnostics/gsmAnalyzer.types';
-import { isGt2 } from '../../types/device';
+import { isGt2, hasEthernet } from '../../types/device';
 
 // --- GSM analyzer inline-hint styling (§1.2) ---
 
@@ -33,6 +33,7 @@ interface LogChannel {
   labelKey: keyof Translations;
   code: string;
   isDebug?: boolean; // uses double semicolon: LOG;;code
+  debugCode?: string; // extra debug channel toggled together: LOG;code;debugCode
 }
 
 const LOG_CHANNELS: LogChannel[] = [
@@ -50,15 +51,17 @@ const LOG_CHANNELS: LogChannel[] = [
   { id: 'rs485a', labelKey: 'diag.channelRs485a', code: '16' },
   { id: 'rs485b', labelKey: 'diag.channelRs485b', code: '17' },
   { id: 'ble', labelKey: 'diag.channelBle', code: '11' },
+  { id: 'eth', labelKey: 'diag.channelEth', code: '26', debugCode: '31' },
 ];
 
-/** GT-2 has only RS232, RS485 and the Bluetooth module; BLE log exists only there. */
-const GT2_CHANNEL_IDS: ReadonlySet<string> = new Set(['rs232', 'rs485', 'ble']);
-const GT2_ONLY_CHANNEL_IDS: ReadonlySet<string> = new Set(['ble']);
+/** GT-2 family has only RS232, RS485 and the Bluetooth module (+ Ethernet on GT-4); BLE/ETH logs exist only there. */
+const GT2_CHANNEL_IDS: ReadonlySet<string> = new Set(['rs232', 'rs485', 'ble', 'eth']);
+const GT2_ONLY_CHANNEL_IDS: ReadonlySet<string> = new Set(['ble', 'eth']);
 
 export const DiagnosticsTab: FC = () => {
   const { password, isConnected } = useConnectionStore();
   const gt2 = useConnectionStore((s) => isGt2(s.deviceType));
+  const eth = useConnectionStore((s) => hasEthernet(s.deviceType));
   const { setLastError } = useStatusStore();
   const {
     log,
@@ -173,11 +176,14 @@ export const DiagnosticsTab: FC = () => {
       return;
     }
 
-    const code = enable ? channel.code : `-${channel.code}`;
+    const sign = enable ? '' : '-';
+    const code = `${sign}${channel.code}`;
     // Debug channels use double semicolon: $PASS;LOG;;code
     const cmd = channel.isDebug
       ? `$${password};LOG;;${code}`
-      : `$${password};LOG;${code}`;
+      : channel.debugCode
+        ? `$${password};LOG;${code};${sign}${channel.debugCode}`
+        : `$${password};LOG;${code}`;
 
     try {
       await window.serial.sendCommand(cmd);
@@ -471,6 +477,7 @@ export const DiagnosticsTab: FC = () => {
           <div className="text-xs text-zinc-400 font-medium mb-2">{t('diag.channels')}</div>
           {LOG_CHANNELS
             .filter((ch) => (gt2 ? GT2_CHANNEL_IDS.has(ch.id) : !GT2_ONLY_CHANNEL_IDS.has(ch.id)))
+            .filter((ch) => ch.id !== 'eth' || eth)
             .map((ch) => (
             <label
               key={ch.id}

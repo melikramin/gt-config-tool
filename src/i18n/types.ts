@@ -320,6 +320,7 @@ export interface Translations {
   'diag.channelRs485a': string;
   'diag.channelRs485b': string;
   'diag.channelBle': string;
+  'diag.channelEth': string;
   'diag.copied': string;
   'diag.saved': string;
   'diag.notConnected': string;
