@@ -205,7 +205,23 @@ export interface Translations {
   'wifi.ssidRequired': string;
   'eth.settings': string;
   'eth.notConnected': string;
-  'eth.notSupportedYet': string;
+  'eth.enabled': string;
+  'eth.enabledOn': string;
+  'eth.enabledOff': string;
+  'eth.info': string;
+  'eth.state': string;
+  'eth.mac': string;
+  'eth.ipNet': string;
+  'eth.dns': string;
+  'eth.lease': string;
+  'eth.leaseSec': string;
+  'eth.refresh': string;
+  'eth.reading': string;
+  'eth.saving': string;
+  'eth.readSuccess': string;
+  'eth.saveSuccess': string;
+  'eth.readError': string;
+  'eth.saveError': string;
 
   // GPS tab
   'gps.panelGps': string;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseRep, parseVer, parseServer } from './parsers';
-import { buildGt2ServerWriteCmd, buildGt2PollingCommands, parseRsResponse } from './commands';
-import { isGt2 } from '../types/device';
+import { parseRep, parseVer, parseServer, parseEthInfo, parseEthSettings, ethStatusText } from './parsers';
+import { buildGt2ServerWriteCmd, buildGt2PollingCommands, parseRsResponse, buildEthWriteCmd, buildEthReadCmd, buildEthInfoCmd } from './commands';
+import { isGt2, hasEthernet } from '../types/device';
 import { visibleTabs } from '../components/layout/Sidebar';
 
 describe('GT-2 detection', () => {
@@ -11,6 +11,23 @@ describe('GT-2 detection', () => {
     expect(ver.deviceName).toBe('GT-2');
     expect(ver.firmwareVersion).toBe('04.95');
     expect(isGt2(ver.hardwareType)).toBe(true);
+  });
+
+  it('maps HW_TYPE 96 to GT-4 and treats it as GT-2 family', () => {
+    const ver = parseVer('$VER;96;01.00;04.96;02.00;11.10.26');
+    expect(ver.deviceName).toBe('GT-4');
+    expect(isGt2(ver.hardwareType)).toBe(true);
+    expect(visibleTabs('96')).toContain('wifi');
+    expect(visibleTabs('96')).toContain('ethernet');
+    expect(hasEthernet('96')).toBe(true);
+  });
+
+  it('hides Ethernet on GT-2 (no ETH command) and on GT-9', () => {
+    expect(hasEthernet('95')).toBe(false);
+    expect(visibleTabs('95')).not.toContain('ethernet');
+    expect(visibleTabs('95')).toContain('wifi');
+    expect(visibleTabs('24')).not.toContain('ethernet');
+    expect(visibleTabs('96').filter((id) => id !== 'ethernet')).toEqual(visibleTabs('95'));
   });
 
   it('does not treat other models or unknown type as GT-2', () => {
@@ -74,7 +91,7 @@ describe('GT-2 RS ports', () => {
 describe('GT-2 tabs', () => {
   it('shows only the GT-2 tab set', () => {
     expect(visibleTabs('95')).toEqual([
-      'status', 'diagnostics', 'server', 'wifi', 'ethernet', 'rs-interfaces', 'system',
+      'status', 'diagnostics', 'server', 'wifi', 'rs-interfaces', 'system',
     ]);
   });
 
@@ -82,5 +99,45 @@ describe('GT-2 tabs', () => {
     expect(visibleTabs('24')).not.toContain('ethernet');
     expect(visibleTabs('')).not.toContain('ethernet');
     expect(visibleTabs('24')).toContain('pumps');
+  });
+});
+
+describe('ETH', () => {
+  it('builds read commands', () => {
+    expect(buildEthInfoCmd('1234')).toBe('$1234;ETH');
+    expect(buildEthReadCmd('1234')).toBe('$1234;ETH;GET');
+  });
+
+  it('parses live info', () => {
+    const info = parseEthInfo('$ETH;1;1;ff;02:36:06:18:39:21;192.168.8.168;255.255.255.0;192.168.8.1;192.168.8.1;43200');
+    expect(info.enabled).toBe('1');
+    expect(info.status).toBe('ff');
+    expect(info.mac).toBe('02:36:06:18:39:21');
+    expect(info.ip).toBe('192.168.8.168');
+    expect(info.gateway).toBe('192.168.8.1');
+    expect(info.leaseTime).toBe('43200');
+  });
+
+  it('parses stored settings', () => {
+    const s = parseEthSettings('$ETH;1;1;192.168.1.100;255.255.255.0;192.168.1.1;8.8.8.8;8.8.4.4');
+    expect(s).toEqual({
+      enabled: '1', dhcp: '1', ip: '192.168.1.100', mask: '255.255.255.0',
+      gateway: '192.168.1.1', dns1: '8.8.8.8', dns2: '8.8.4.4',
+    });
+  });
+
+  it('builds write commands', () => {
+    const empty = { enabled: '0', dhcp: '1', ip: '', mask: '', gateway: '', dns1: '', dns2: '' };
+    expect(buildEthWriteCmd('1234', empty)).toBe('$1234;ETH;SET;0;1');
+    expect(buildEthWriteCmd('1234', {
+      enabled: '1', dhcp: '0', ip: '192.168.1.100', mask: '255.255.255.0',
+      gateway: '192.168.1.1', dns1: '8.8.8.8', dns2: '8.8.4.4',
+    })).toBe('$1234;ETH;SET;1;0;192.168.1.100;255.255.255.0;192.168.1.1;8.8.8.8;8.8.4.4');
+  });
+
+  it('describes status bits', () => {
+    expect(ethStatusText('ff', 'en')).toBe('Server connected (100 Mbps, full duplex)');
+    expect(ethStatusText('03', 'en')).toBe('No link');
+    expect(ethStatusText('00', 'ru')).toBe('Нет модуля');
   });
 });

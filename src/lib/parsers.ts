@@ -454,6 +454,84 @@ export function parseWifiNetwork(raw: string): WifiNetworkData {
   };
 }
 
+// ---- Ethernet (GT-2 family) ----
+
+// ETH: $ETH;IS_ENABLED;IS_DHCP;STATUS;MAC;IP_NET;MASK_NET;GATEWAY_NET;DNS_NET;LEASE_TIME
+export interface EthInfoData {
+  enabled: string;
+  dhcp: string;
+  status: string; // hex bitfield, see ethStatusFlags
+  mac: string;
+  ip: string;
+  mask: string;
+  gateway: string;
+  dns: string;
+  leaseTime: string; // seconds
+}
+
+export function parseEthInfo(raw: string): EthInfoData {
+  const f = fields(raw);
+  return {
+    enabled: safeField(f, 0),
+    dhcp: safeField(f, 1),
+    status: safeField(f, 2),
+    mac: safeField(f, 3),
+    ip: safeField(f, 4),
+    mask: safeField(f, 5),
+    gateway: safeField(f, 6),
+    dns: safeField(f, 7),
+    leaseTime: safeField(f, 8),
+  };
+}
+
+// ETH;GET: $ETH;IS_ENABLED;IS_DHCP;IP;MASK;GATEWAY;DNS1;DNS2
+export interface EthSettingsData {
+  enabled: string;
+  dhcp: string;
+  ip: string;
+  mask: string;
+  gateway: string;
+  dns1: string;
+  dns2: string;
+}
+
+export function parseEthSettings(raw: string): EthSettingsData {
+  const f = fields(raw);
+  return {
+    enabled: safeField(f, 0, '0'),
+    dhcp: safeField(f, 1, '1'),
+    ip: safeField(f, 2),
+    mask: safeField(f, 3),
+    gateway: safeField(f, 4),
+    dns1: safeField(f, 5),
+    dns2: safeField(f, 6),
+  };
+}
+
+// ETH STATUS bitfield:
+// bit0: hw_detected, bit1: on, bit2: link_up, bit3: ip_assigned,
+// bit4: connected (server socket), bit5: full_duplex, bit6: 100mbps, bit7: dhcp
+
+/** Human-readable Ethernet state from the STATUS hex byte. */
+export function ethStatusText(hexCode: string, locale: string): string {
+  const val = parseInt(hexCode, 16);
+  if (isNaN(val)) return hexCode ? `0x${hexCode}` : '—';
+  const ru = locale === 'ru';
+
+  if (!(val & 0x01)) return ru ? 'Нет модуля' : 'No HW';
+  if (!(val & 0x02)) return ru ? 'Выключен' : 'Off';
+  if (!(val & 0x04)) return ru ? 'Нет кабеля' : 'No link';
+
+  const speed = `${val & 0x40 ? '100' : '10'} ${ru ? 'Мбит/с' : 'Mbps'}`;
+  const duplex = val & 0x20 ? (ru ? 'полный дуплекс' : 'full duplex') : (ru ? 'полудуплекс' : 'half duplex');
+  const state = val & 0x10
+    ? (ru ? 'Сервер подключён' : 'Server connected')
+    : val & 0x08
+      ? (ru ? 'IP получен' : 'IP assigned')
+      : (ru ? 'Ожидание IP' : 'Waiting for IP');
+  return `${state} (${speed}, ${duplex})`;
+}
+
 // TAGS: $TAGS;MEMORY;LIMIT;ADDED
 export interface TagsData {
   memory: string;

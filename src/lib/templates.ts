@@ -11,7 +11,7 @@
 
 import { useSettingsStore } from '../stores/settingsStore';
 import { useConnectionStore } from '../stores/connectionStore';
-import { isGt2 } from '../types/device';
+import { isGt2, hasEthernet } from '../types/device';
 import {
   buildApnWriteCmd,
   buildServerWriteCmd,
@@ -19,6 +19,7 @@ import {
   buildPrset20SetCmd,
   buildPrset21SetCmd,
   buildWifiNetWriteCmd,
+  buildEthWriteCmd,
   buildFilterWriteCmd,
   buildMsensWriteCmd,
   buildTiltWriteCmd,
@@ -95,7 +96,9 @@ import {
   parseApn,
   parseServer,
   parseWifiNetwork,
+  parseEthSettings,
   type WifiNetworkData,
+  type EthSettingsData,
   type ApnData,
   type ServerData,
 } from './parsers';
@@ -155,6 +158,11 @@ export function buildTemplateCommands(): string[] | null {
       };
       lines.push(buildWifiNetWriteCmd(password, i + 1, params));
     }
+  }
+
+  // ---- Ethernet (GT-4 only) ----
+  if (hasEthernet(deviceType) && settings.ethSettings) {
+    lines.push(buildEthWriteCmd(password, settings.ethSettings));
   }
 
   // ---- GPS ----
@@ -292,6 +300,7 @@ function lineToResponse(line: string): { cmd: string; response: string } | null 
     'PRSET20', 'PRSET21',
     'MSENS', 'TILT',
     'PRINTER',
+    'ETH',
   ];
 
   // Pattern-based: WIFINETn, ENCODERn, LLSn, CAMERAn
@@ -327,6 +336,7 @@ export function loadTemplateFromText(text: string): number {
   let buf20: Uint8Array | null = null;
   let buf21: Uint8Array | null = null;
   const wifiNetworks: WifiNetworkData[] = [];
+  let eth: EthSettingsData | null = null;
   let filter = settings.gpsFilter;
   let msens = settings.gpsMsens;
   let tilt = settings.gpsTilt;
@@ -388,6 +398,13 @@ export function loadTemplateFromText(text: string): number {
     if (/^WIFINET\d+$/.test(cmd)) {
       const net = parseWifiNetwork(response);
       if (net) { wifiNetworks.push(net); parsed++; }
+      continue;
+    }
+
+    // ---- Ethernet ----
+    if (cmd === 'ETH') {
+      eth = parseEthSettings(response);
+      parsed++;
       continue;
     }
 
@@ -561,6 +578,8 @@ export function loadTemplateFromText(text: string): number {
   if (wifiNetworks.length > 0) {
     settings.setWifiSettings(wifiNetworks);
   }
+
+  if (eth) settings.setEthSettings(eth);
 
   if (filter || msens || tilt) {
     settings.setGpsSettings(

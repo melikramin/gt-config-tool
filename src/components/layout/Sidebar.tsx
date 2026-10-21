@@ -3,7 +3,7 @@ import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 import { useTagsStore } from '../../stores/tagsStore';
 import { useConnectionStore } from '../../stores/connectionStore';
-import { isGt2 } from '../../types/device';
+import { isGt2, hasEthernet } from '../../types/device';
 
 export type TabId =
   | 'status'
@@ -54,14 +54,16 @@ const GT2_TABS: ReadonlySet<TabId> = new Set<TabId>([
   'status', 'diagnostics', 'server', 'wifi', 'ethernet', 'rs-interfaces', 'system',
 ]);
 
-/** Tabs that exist only on GT-2 and are hidden for every other device. */
+/** Tabs that exist only on GT-2 family and are hidden for every other device. */
 const GT2_ONLY_TABS: ReadonlySet<TabId> = new Set<TabId>(['ethernet']);
 
 /** Tabs shown for the given HW_TYPE ('' = not detected yet → full GT-9 set). */
 export function visibleTabs(deviceType: string): TabId[] {
   const gt2 = isGt2(deviceType);
+  const eth = hasEthernet(deviceType);
   return TABS
     .filter((tab) => (gt2 ? GT2_TABS.has(tab.id) : !GT2_ONLY_TABS.has(tab.id)))
+    .filter((tab) => tab.id !== 'ethernet' || eth)
     .map((tab) => tab.id);
 }
 

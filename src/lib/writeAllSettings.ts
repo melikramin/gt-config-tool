@@ -11,6 +11,7 @@ import {
   buildApnWriteCmd,
   buildServerWriteCmd,
   buildGt2ServerWriteCmd,
+  buildEthWriteCmd,
   buildPrset20SetCmd,
   buildPrset21SetCmd,
   buildWifiNetWriteCmd,
@@ -42,7 +43,7 @@ import {
   type RsPortName,
   type WifiNetworkParams,
 } from './commands';
-import { isGt2 } from '../types/device';
+import { isGt2, hasEthernet } from '../types/device';
 
 function isErrorResponse(r: string): boolean {
   const t = r.trim();
@@ -79,8 +80,8 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
 
   // Approximate total steps for progress bar
   // Server:2, Protocol:2, WiFi:up to 5, GPS:3, IO:up to 6+2, RS:6, FLS:6,
-  // Pumps:4, PumpFmt:4, Keyboard:2, Security:5 (incl. DATE), Printer:4, Camera:CAMERA_SLOT_COUNT
-  const TOTAL_STEPS = 51 + CAMERA_SLOT_COUNT;
+  // Pumps:4, PumpFmt:4, Keyboard:2, Security:5 (incl. DATE), Printer:4, Ethernet:1, Camera:CAMERA_SLOT_COUNT
+  const TOTAL_STEPS = 52 + CAMERA_SLOT_COUNT;
   let step = 0;
   let errors: string[] = [];
 
@@ -169,6 +170,14 @@ export async function writeAllSettings(callbacks: WriteAllCallbacks): Promise<bo
     } else {
       step += 5;
     }
+
+    // ---- Ethernet (GT-4 only) ----
+    if (hasEthernet(deviceType) && settings.ethSettings) {
+      progress('ETH');
+      const r = await send(buildEthWriteCmd(password, settings.ethSettings));
+      if (isPasswordError(r)) { await callbacks.onPasswordError(); return false; }
+      if (isErrorResponse(r)) errors.push(`ETH: ${r.trim()}`);
+    } else { step++; }
 
     // ---- GPS ----
     if (settings.gpsFilter) {

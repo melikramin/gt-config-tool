@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ApnData, ServerData, WifiNetworkData } from '../lib/parsers';
+import type { ApnData, ServerData, WifiNetworkData, EthSettingsData } from '../lib/parsers';
 import type {
   FilterParams,
   MsensParams,
@@ -45,6 +45,9 @@ interface SettingsState {
 
   // WiFi tab
   wifiNetworks: WifiNetworkData[] | null;
+
+  // Ethernet tab (GT-2 family)
+  ethSettings: EthSettingsData | null;
 
   // GPS tab
   gpsFilter: FilterParams | null;
@@ -94,6 +97,7 @@ interface SettingsState {
   setServerSettings: (apn: ApnData, server: ServerData) => void;
   setProtocolSettings: (buf20: Uint8Array, buf21: Uint8Array) => void;
   setWifiSettings: (networks: WifiNetworkData[]) => void;
+  setEthSettings: (eth: EthSettingsData) => void;
   setGpsSettings: (filter: FilterParams, msens: MsensParams, tilt: TiltParams) => void;
   setInputsSettings: (count: number, inputs: InputParams[], enc1: EncoderParams, enc2: EncoderParams) => void;
   setRsSettings: (ports: RsPortParams[], available: boolean[]) => void;
@@ -108,7 +112,7 @@ interface SettingsState {
   clearAll: () => void;
 }
 
-const INITIAL: Omit<SettingsState, 'notifyTemplateLoaded' | 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setSecurityDateSync' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
+const INITIAL: Omit<SettingsState, 'notifyTemplateLoaded' | 'setIsReadingAll' | 'setIsWritingAll' | 'setServerSettings' | 'setProtocolSettings' | 'setWifiSettings' | 'setEthSettings' | 'setGpsSettings' | 'setInputsSettings' | 'setRsSettings' | 'setFlsSettings' | 'setPumpsSettings' | 'setPumpFormats' | 'setKeyboardSettings' | 'setSecuritySettings' | 'setSecurityDateSync' | 'setPrinterSettings' | 'setCameras' | 'clearAll'> = {
   isReadingAll: false,
   isWritingAll: false,
   protoDirty: false,
@@ -117,6 +121,7 @@ const INITIAL: Omit<SettingsState, 'notifyTemplateLoaded' | 'setIsReadingAll' | 
   protoBuf20: null,
   protoBuf21: null,
   wifiNetworks: null,
+  ethSettings: null,
   gpsFilter: null,
   gpsMsens: null,
   gpsTilt: null,
@@ -152,6 +157,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   // loader re-sets protoDirty afterwards via notifyTemplateLoaded().
   setProtocolSettings: (protoBuf20, protoBuf21) => set({ protoBuf20, protoBuf21, protoDirty: false }),
   setWifiSettings: (wifiNetworks) => set({ wifiNetworks }),
+  setEthSettings: (ethSettings) => set({ ethSettings }),
   setGpsSettings: (gpsFilter, gpsMsens, gpsTilt) => set({ gpsFilter, gpsMsens, gpsTilt }),
   setInputsSettings: (inputCount, inputs, encoder1, encoder2) => set({ inputCount, inputs, encoder1, encoder2 }),
   setRsSettings: (rsPorts, rsAvailable) => set({ rsPorts, rsAvailable }),

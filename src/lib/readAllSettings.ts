@@ -87,6 +87,7 @@ import {
   type PumpParams,
   type PumpFormatParams,
   type CameraParams,
+  buildEthReadCmd,
 } from './commands';
 import {
   parseApn,
@@ -96,8 +97,9 @@ import {
   parseVer,
   type ServerData,
   type WifiNetworkData,
+  parseEthSettings,
 } from './parsers';
-import { isGt2 } from '../types/device';
+import { isGt2, hasEthernet } from '../types/device';
 
 function isErrorResponse(r: string): boolean {
   const t = r.trim();
@@ -151,7 +153,7 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
       // Fall through with the full GT-9 command set.
     }
   }
-  if (isGt2(deviceType)) return readGt2Settings(password, callbacks);
+  if (isGt2(deviceType)) return readGt2Settings(password, hasEthernet(deviceType), callbacks);
 
   settings.setIsReadingAll(true);
 
@@ -431,18 +433,18 @@ export async function readAllSettings(callbacks: ReadAllCallbacks): Promise<bool
 }
 
 /**
- * GT-2 (router): only SERVER1, WiFi networks and RS232/RS485 exist.
+ * GT-2 family (GT-2/GT-4 routers): only SERVER1, WiFi networks, Ethernet and RS232/RS485 exist.
  * No APN — GT-2 has no GSM modem; an empty APN is stored so the Server tab
  * and "write all" treat the server settings as loaded.
  */
-async function readGt2Settings(password: string, callbacks: ReadAllCallbacks): Promise<boolean> {
+async function readGt2Settings(password: string, eth: boolean, callbacks: ReadAllCallbacks): Promise<boolean> {
   const settings = useSettingsStore.getState();
   const status = useStatusStore.getState();
 
   settings.setIsReadingAll(true);
 
-  // SERVER1 + WIFINET + up to WIFI_MAX_NETWORKS + RS232/RS485
-  const TOTAL_STEPS = 2 + WIFI_MAX_NETWORKS + GT2_RS_PORTS.size;
+  // SERVER1 + WIFINET + up to WIFI_MAX_NETWORKS + ETH + RS232/RS485
+  const TOTAL_STEPS = 3 + WIFI_MAX_NETWORKS + GT2_RS_PORTS.size;
   let step = 0;
   const progress = (text: string) => {
     step++;
@@ -473,6 +475,16 @@ async function readGt2Settings(password: string, callbacks: ReadAllCallbacks): P
     }
     step += (WIFI_MAX_NETWORKS - maxWifi);
     settings.setWifiSettings(wifiNetworks);
+
+    // ---- Ethernet (GT-4 only — GT-2 has no ETH command) ----
+    if (eth) {
+      progress('ETH');
+      const ethResp = await window.serial.sendCommand(buildEthReadCmd(password));
+      if (isPasswordError(ethResp)) { await callbacks.onPasswordError(); return false; }
+      if (!isErrorResponse(ethResp)) settings.setEthSettings(parseEthSettings(ethResp));
+    } else {
+      step++;
+    }
 
     // ---- RS Interfaces (RS232 + RS485 only; A/B ports don't exist) ----
     const rsPorts: RsPortParams[] = [];

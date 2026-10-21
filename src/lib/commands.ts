@@ -378,6 +378,41 @@ export function buildWifiDeleteAllCmd(password: string): string {
   return buildCmd(password, 'WIFINET', ['DEL', 'ALL']);
 }
 
+// ---- Ethernet (GT-2 family) ----
+
+export interface EthSettingsParams {
+  enabled: string;  // '0' / '1'
+  dhcp: string;     // '0' static, '1' DHCP
+  ip: string;
+  mask: string;
+  gateway: string;
+  dns1: string;
+  dns2: string;
+}
+
+/** Read live Ethernet state: $PASS;ETH → $ETH;EN;DHCP;STATUS;MAC;IP;MASK;GW;DNS;LEASE */
+export function buildEthInfoCmd(password: string): string {
+  return buildCmd(password, 'ETH');
+}
+
+/** Read stored Ethernet settings: $PASS;ETH;GET → $ETH;EN;DHCP;IP;MASK;GW;DNS1;DNS2 */
+export function buildEthReadCmd(password: string): string {
+  return buildCmd(password, 'ETH', ['GET']);
+}
+
+/**
+ * Write Ethernet settings: $PASS;ETH;SET;EN;DHCP[;IP;MASK;GW;DNS1;DNS2].
+ * With DHCP on and no static address entered, the IP block is omitted
+ * (as in `$1234;ETH;SET;0;0`); otherwise it is sent so the static values
+ * are kept for when DHCP is switched off.
+ */
+export function buildEthWriteCmd(password: string, p: EthSettingsParams): string {
+  const head = ['SET', p.enabled, p.dhcp];
+  const ipBlock = [p.ip, p.mask, p.gateway, p.dns1, p.dns2];
+  if (p.dhcp === '1' && ipBlock.every((v) => !v.trim())) return buildCmd(password, 'ETH', head);
+  return buildCmd(password, 'ETH', [...head, ...ipBlock]);
+}
+
 // ---- GPS/GLONASS tab commands (FILTER + MSENS + TILT) ----
 
 export interface FilterParams {
