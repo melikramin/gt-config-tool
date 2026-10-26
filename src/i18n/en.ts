@@ -71,6 +71,7 @@ export const en: Translations = {
 
   // Status tab
   'status.identification': 'Identification',
+  'status.notConnected': 'Connect a device: choose the COM port and press Connect',
   'status.series': 'Series',
   'status.firmware': 'Firmware',
   'status.device': 'Device',
@@ -127,7 +128,7 @@ export const en: Translations = {
   'server.channelEth': 'Ethernet',
   'server.channelEthGsm': 'Ethernet + GSM',
   'server.channelEthWifi': 'Ethernet + WiFi',
-  'server.protoGt2Slave': 'GT2 Slave',
+  'server.protoGt2Slave': 'GT2',
   'server.reading': 'Reading settings...',
   'server.saving': 'Saving settings...',
   'server.readSuccess': 'Settings read successfully',
@@ -569,6 +570,9 @@ export const en: Translations = {
   'sys.bleUpdateTitle': 'BLE Module Update',
   'sys.bleUpdateDesc': 'Puts the Bluetooth module into update mode. The update itself is done from a phone over Bluetooth; the device keeps working meanwhile.',
   'sys.bleUpdateBtn': 'Update BLE',
+  'sys.bleResetTitle': 'BLE Module Reset',
+  'sys.bleResetDesc': 'Reboots the Bluetooth module. The device itself keeps working.',
+  'sys.bleResetBtn': 'Reset BLE',
   'sys.erasureTitle': 'Erase Memory',
   'sys.erasureDesc': 'Full memory wipe. This action is irreversible.',
   'sys.erasureBtn': 'Erase Memory',

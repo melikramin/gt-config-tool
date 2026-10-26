@@ -71,6 +71,7 @@ export interface Translations {
 
   // Status tab
   'status.identification': string;
+  'status.notConnected': string,
   'status.series': string;
   'status.firmware': string;
   'status.device': string;
@@ -570,6 +571,9 @@ export interface Translations {
   'sys.bleUpdateTitle': string;
   'sys.bleUpdateDesc': string;
   'sys.bleUpdateBtn': string;
+  'sys.bleResetTitle': string;
+  'sys.bleResetDesc': string;
+  'sys.bleResetBtn': string;
   'sys.erasureTitle': string;
   'sys.erasureDesc': string;
   'sys.erasureBtn': string;

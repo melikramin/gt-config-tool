@@ -10,6 +10,7 @@ import {
   buildServerWriteCmd,
   buildGt2ServerWriteCmd,
   SERVER_PROTO_GT2_SLAVE,
+  gt2ServerChannel,
 } from '../../lib/commands';
 import { parseApn, parseServer, type ApnData, type ServerData } from '../../lib/parsers';
 import { isGt2 } from '../../types/device';
@@ -314,7 +315,7 @@ export const ServerTab: FC = () => {
         ...baseSrv,
         ip: state.server.ip,
         port: state.server.port,
-        channel: state.server.channel,
+        channel: gt2 ? gt2ServerChannel(state.server.channel) : state.server.channel,
         protocol: gt2 ? SERVER_PROTO_GT2_SLAVE : state.server.protocol,
       });
       setStatusMsg(t('server.saveSuccess'));
@@ -345,6 +346,8 @@ export const ServerTab: FC = () => {
   }));
   // GT-2 always writes the GT-2 slave protocol, whatever the device reported.
   const protocolValue = gt2 ? SERVER_PROTO_GT2_SLAVE : state.server.protocol;
+  // GT-2 has no GSM — an unconfigured server (channel 0 = GSM) shows WiFi.
+  const channelValue = gt2 ? gt2ServerChannel(state.server.channel) : state.server.channel;
 
   // ---- Render ----
 
@@ -410,7 +413,7 @@ export const ServerTab: FC = () => {
           <div className="flex flex-wrap items-end gap-2 mt-2">
             <InlineSelect
               label={t('server.channel')}
-              value={state.server.channel}
+              value={channelValue}
               options={channelOptions}
               onChange={(v) => updateServer('channel', v)}
               disabled={busy}

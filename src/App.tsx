@@ -67,8 +67,8 @@ const App: FC = () => {
 
   // Device detected (e.g. GT-2) with a narrower tab set — leave a tab it doesn't have.
   useEffect(() => {
-    if (!visibleTabs(deviceType).includes(activeTab)) setActiveTab('status');
-  }, [deviceType, activeTab]);
+    if (!visibleTabs(deviceType, isConnected || isSystemBusy).includes(activeTab)) setActiveTab('status');
+  }, [deviceType, activeTab, isConnected, isSystemBusy]);
 
   const handleTabChange = useCallback((tab: TabId) => {
     // When leaving diagnostics tab, disable all logs to avoid interference

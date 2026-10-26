@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseRep, parseVer, parseServer, parseEthInfo, parseEthSettings, ethStatusText } from './parsers';
-import { buildGt2ServerWriteCmd, buildGt2PollingCommands, parseRsResponse, buildEthWriteCmd, buildEthReadCmd, buildEthInfoCmd } from './commands';
+import { buildGt2ServerWriteCmd, gt2ServerChannel, buildGt2PollingCommands, parseRsResponse, buildEthWriteCmd, buildEthReadCmd, buildEthInfoCmd } from './commands';
 import { isGt2, hasEthernet } from '../types/device';
 import { visibleTabs } from '../components/layout/Sidebar';
 
@@ -64,6 +64,16 @@ describe('GT-2 SERVER', () => {
       .toBe('$1234;SERVER1;SET;07;00;192.168.8.10;5050;;;;0;10;5;1;4;6;1');
   });
 
+  it('replaces GSM channels with WiFi (no GSM modem)', () => {
+    expect(gt2ServerChannel('0')).toBe('1');
+    expect(gt2ServerChannel('')).toBe('1');
+    expect(gt2ServerChannel('3')).toBe('1');
+    expect(gt2ServerChannel('4')).toBe('4');
+    expect(gt2ServerChannel('6')).toBe('6');
+    expect(buildGt2ServerWriteCmd('1234', 1, '1.2.3.4', '5050', '0'))
+      .toBe('$1234;SERVER1;SET;07;00;1.2.3.4;5050;;;;0;10;5;1;1;6;1');
+  });
+
   it('parses a real GT-2 SERVER1 response', () => {
     const srv = parseServer('$SERVER1;07;00;192.196.2.1;2222;;;120;0;10;5;1;1;6;1');
     expect(srv.ip).toBe('192.196.2.1');
@@ -93,6 +103,11 @@ describe('GT-2 tabs', () => {
     expect(visibleTabs('95')).toEqual([
       'status', 'diagnostics', 'server', 'wifi', 'rs-interfaces', 'system',
     ]);
+  });
+
+  it('shows only Status with no device connected', () => {
+    expect(visibleTabs('', false)).toEqual(['status']);
+    expect(visibleTabs('95', false)).toEqual(['status']);
   });
 
   it('hides Ethernet for other devices', () => {

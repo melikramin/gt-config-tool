@@ -3,6 +3,7 @@ import { useI18n } from '../../i18n';
 import type { Translations } from '../../i18n/types';
 import { useTagsStore } from '../../stores/tagsStore';
 import { useConnectionStore } from '../../stores/connectionStore';
+import { useStatusStore } from '../../stores/statusStore';
 import { isGt2, hasEthernet } from '../../types/device';
 
 export type TabId =
@@ -57,8 +58,12 @@ const GT2_TABS: ReadonlySet<TabId> = new Set<TabId>([
 /** Tabs that exist only on GT-2 family and are hidden for every other device. */
 const GT2_ONLY_TABS: ReadonlySet<TabId> = new Set<TabId>(['ethernet']);
 
-/** Tabs shown for the given HW_TYPE ('' = not detected yet → full GT-9 set). */
-export function visibleTabs(deviceType: string): TabId[] {
+/**
+ * Tabs shown for the given HW_TYPE ('' = not detected yet → full GT-9 set).
+ * With no device connected only Status is shown — the tab set belongs to a device.
+ */
+export function visibleTabs(deviceType: string, connected = true): TabId[] {
+  if (!connected) return ['status'];
   const gt2 = isGt2(deviceType);
   const eth = hasEthernet(deviceType);
   return TABS
@@ -78,7 +83,10 @@ export const Sidebar: FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   // its progress bar stay on screen (TagsTab would otherwise unmount).
   const busy = useTagsStore((s) => s.busy);
   const deviceType = useConnectionStore((s) => s.deviceType);
-  const visible = new Set(visibleTabs(deviceType));
+  const isConnected = useConnectionStore((s) => s.isConnected);
+  // A system op (firmware update) disconnects on purpose — keep its tab meanwhile.
+  const isSystemBusy = useStatusStore((s) => s.isSystemBusy);
+  const visible = new Set(visibleTabs(deviceType, isConnected || isSystemBusy));
 
   return (
     <aside className="w-44 bg-zinc-900 border-r border-zinc-700 flex flex-col py-1 overflow-y-auto">

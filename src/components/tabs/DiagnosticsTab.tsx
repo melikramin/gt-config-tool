@@ -54,8 +54,8 @@ const LOG_CHANNELS: LogChannel[] = [
   { id: 'eth', labelKey: 'diag.channelEth', code: '26', debugCode: '31' },
 ];
 
-/** GT-2 family has only RS232, RS485 and the Bluetooth module (+ Ethernet on GT-4); BLE/ETH logs exist only there. */
-const GT2_CHANNEL_IDS: ReadonlySet<string> = new Set(['rs232', 'rs485', 'ble', 'eth']);
+/** GT-2 family has only WiFi, RS232, RS485 and the Bluetooth module (+ Ethernet on GT-4); BLE/ETH logs exist only there. */
+const GT2_CHANNEL_IDS: ReadonlySet<string> = new Set(['wifi', 'rs232', 'rs485', 'ble', 'eth']);
 const GT2_ONLY_CHANNEL_IDS: ReadonlySet<string> = new Set(['ble', 'eth']);
 
 export const DiagnosticsTab: FC = () => {

@@ -198,6 +198,17 @@ export function buildServerWriteCmd(
 /** Server PROTOCOL value of the GT-2 slave protocol (the only one GT-2 accepts). */
 export const SERVER_PROTO_GT2_SLAVE = '6';
 
+/** Server CHANNEL values that need a GSM modem (GSM, GSM+WiFi, WiFi+GSM, Ethernet+GSM). */
+const GSM_SERVER_CHANNELS: ReadonlySet<string> = new Set(['0', '2', '3', '5']);
+
+/**
+ * GT-2 family has no GSM modem: a GSM channel (e.g. the default `0` of an
+ * unconfigured server) or an empty one becomes WiFi.
+ */
+export function gt2ServerChannel(channel: string): string {
+  return channel === '' || GSM_SERVER_CHANNELS.has(channel) ? '1' : channel;
+}
+
 /**
  * Write server settings in the GT-2 format:
  * $PASS;SERVERn;SET;07;00;IP;PORT;;;;0;10;5;1;CHANNEL;6;1
@@ -214,7 +225,7 @@ export function buildGt2ServerWriteCmd(
   return buildCmd(password, `SERVER${index}`, [
     'SET', '07', '00', ip, port,
     '', '', '', '0', '10', '5',
-    '1', channel, SERVER_PROTO_GT2_SLAVE, '1',
+    '1', gt2ServerChannel(channel), SERVER_PROTO_GT2_SLAVE, '1',
   ]);
 }
 

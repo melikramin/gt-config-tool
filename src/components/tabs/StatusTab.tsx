@@ -426,6 +426,15 @@ export const StatusTab: FC = () => {
 
   const inputTypeMap = locale === 'ru' ? INPUT_TYPES_RU : INPUT_TYPES;
 
+  // No device yet — nothing to show until one is connected (the device decides the panels).
+  if (!isConnected) {
+    return (
+      <div className="h-full flex items-center justify-center p-6">
+        <p className="text-zinc-500 text-sm text-center">{t('status.notConnected')}</p>
+      </div>
+    );
+  }
+
   // GT-2 router: no GSM/GNSS/pumps/IO/sensors/tags — identification + power only.
   if (gt2) {
     return (
@@ -437,7 +446,8 @@ export const StatusTab: FC = () => {
               label={t('status.firmware')}
               value={ver.firmwareVersion && ver.releaseDate ? `${ver.firmwareVersion} — ${ver.releaseDate}` : ''}
             />
-            <Field label={t('status.device')} value={rep.model || ver.deviceName} />
+            {/* Model name comes from REP field 0 (e.g. "GT2X"), not the HW_TYPE table */}
+            <Field label={t('status.device')} value={rep.model} />
           </Panel>
 
           <Panel title={t('status.statusPanel')}>

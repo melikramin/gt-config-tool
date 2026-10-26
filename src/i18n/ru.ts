@@ -71,6 +71,7 @@ export const ru: Translations = {
 
   // Status tab
   'status.identification': 'Идентификация',
+  'status.notConnected': 'Подключите устройство: выберите COM-порт и нажмите «Подключиться»',
   'status.series': 'Серия',
   'status.firmware': 'Прошивка',
   'status.device': 'Прибор',
@@ -127,7 +128,7 @@ export const ru: Translations = {
   'server.channelEth': 'Ethernet',
   'server.channelEthGsm': 'Ethernet + GSM',
   'server.channelEthWifi': 'Ethernet + WiFi',
-  'server.protoGt2Slave': 'GT2 Slave',
+  'server.protoGt2Slave': 'GT2',
   'server.reading': 'Чтение настроек...',
   'server.saving': 'Сохранение настроек...',
   'server.readSuccess': 'Настройки считаны',
@@ -569,6 +570,9 @@ export const ru: Translations = {
   'sys.bleUpdateTitle': 'Обновление BLE-модуля',
   'sys.bleUpdateDesc': 'Переводит Bluetooth-модуль в режим обновления. Само обновление выполняется с телефона по Bluetooth; прибор в это время продолжает работать.',
   'sys.bleUpdateBtn': 'Обновить BLE',
+  'sys.bleResetTitle': 'Перезагрузка BLE-модуля',
+  'sys.bleResetDesc': 'Перезагружает Bluetooth-модуль. Сам прибор продолжает работать.',
+  'sys.bleResetBtn': 'Перезагрузить BLE',
   'sys.erasureTitle': 'Очистка памяти',
   'sys.erasureDesc': 'Полная очистка памяти устройства. Действие необратимо.',
   'sys.erasureBtn': 'Очистить память',

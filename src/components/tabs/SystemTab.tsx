@@ -37,11 +37,14 @@ const ACTIONS: SystemAction[] = [
  * GT-2: start the Bluetooth (BLE) module update. The device just arms the BLE
  * bootloader and keeps working; the update itself is done from a phone.
  */
-const BLE_UPDATE: SystemAction = { key: 'bleUpdate', titleKey: 'sys.bleUpdateTitle', descKey: 'sys.bleUpdateDesc', btnKey: 'sys.bleUpdateBtn', command: 'GT2;UPDATE', irreversible: false, accent: 'blue' };
+const BLE_UPDATE: SystemAction = { key: 'bleUpdate', titleKey: 'sys.bleUpdateTitle', descKey: 'sys.bleUpdateDesc', btnKey: 'sys.bleUpdateBtn', command: 'BLE;UPDATE', irreversible: false, accent: 'blue' };
+
+/** GT-2: reboot the Bluetooth (BLE) module only; the device itself keeps running. */
+const BLE_RESET: SystemAction = { key: 'bleReset', titleKey: 'sys.bleResetTitle', descKey: 'sys.bleResetDesc', btnKey: 'sys.bleResetBtn', command: 'BLE;RESET', irreversible: false, accent: 'blue' };
 
 /** GT-2 has no tag memory / keys / accelerometer / SD card. */
 const GT2_ACTION_KEYS: ReadonlySet<string> = new Set(['factory', 'default']);
-const GT2_ACTIONS: SystemAction[] = [...ACTIONS.filter((a) => GT2_ACTION_KEYS.has(a.key)), BLE_UPDATE];
+const GT2_ACTIONS: SystemAction[] = [...ACTIONS.filter((a) => GT2_ACTION_KEYS.has(a.key)), BLE_UPDATE, BLE_RESET];
 
 const SD_ON: SystemAction  = { key: 'sdOn',  titleKey: 'sys.sdOnTitle',  descKey: 'sys.sdDesc', btnKey: 'sys.sdOnBtn',  command: 'SDCARD;SET;1', sendResetAfter: true, irreversible: false, accent: 'blue' };
 const SD_OFF: SystemAction = { key: 'sdOff', titleKey: 'sys.sdOffTitle', descKey: 'sys.sdDesc', btnKey: 'sys.sdOffBtn', command: 'SDCARD;SET;0', sendResetAfter: true, irreversible: false, accent: 'blue' };
